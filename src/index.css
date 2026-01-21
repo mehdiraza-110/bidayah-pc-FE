@@ -1,0 +1,321 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Cyberpunk Gaming Theme */
+    --background: 220 20% 4%;
+    --foreground: 180 10% 95%;
+
+    --card: 220 25% 8%;
+    --card-foreground: 180 10% 95%;
+
+    --popover: 220 25% 6%;
+    --popover-foreground: 180 10% 95%;
+
+    /* Electric Cyan Primary */
+    --primary: 180 100% 50%;
+    --primary-foreground: 220 20% 4%;
+
+    /* Neon Purple Secondary */
+    --secondary: 280 100% 60%;
+    --secondary-foreground: 180 10% 95%;
+
+    /* RGB Green Accent */
+    --accent: 120 100% 50%;
+    --accent-foreground: 220 20% 4%;
+
+    --muted: 220 20% 15%;
+    --muted-foreground: 220 10% 60%;
+
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 180 10% 95%;
+
+    --border: 220 20% 15%;
+    --input: 220 20% 12%;
+    --ring: 180 100% 50%;
+
+    --radius: 0.5rem;
+
+    /* Custom Gaming Colors */
+    --neon-cyan: 180 100% 50%;
+    --neon-purple: 280 100% 60%;
+    --neon-green: 120 100% 50%;
+    --neon-pink: 320 100% 60%;
+    --neon-orange: 25 100% 55%;
+    
+    /* Glow Effects */
+    --glow-cyan: 0 0 20px hsl(180 100% 50% / 0.5), 0 0 40px hsl(180 100% 50% / 0.3), 0 0 60px hsl(180 100% 50% / 0.1);
+    --glow-purple: 0 0 20px hsl(280 100% 60% / 0.5), 0 0 40px hsl(280 100% 60% / 0.3), 0 0 60px hsl(280 100% 60% / 0.1);
+    --glow-green: 0 0 20px hsl(120 100% 50% / 0.5), 0 0 40px hsl(120 100% 50% / 0.3), 0 0 60px hsl(120 100% 50% / 0.1);
+    
+    /* Gradients */
+    --gradient-cyber: linear-gradient(135deg, hsl(180 100% 50%), hsl(280 100% 60%));
+    --gradient-rgb: linear-gradient(90deg, hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%), hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%));
+    --gradient-dark: linear-gradient(180deg, hsl(220 20% 8%), hsl(220 20% 4%));
+    
+    /* Sidebar */
+    --sidebar-background: 220 25% 6%;
+    --sidebar-foreground: 180 10% 95%;
+    --sidebar-primary: 180 100% 50%;
+    --sidebar-primary-foreground: 220 20% 4%;
+    --sidebar-accent: 220 20% 12%;
+    --sidebar-accent-foreground: 180 10% 95%;
+    --sidebar-border: 220 20% 15%;
+    --sidebar-ring: 180 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-rajdhani;
+    background-image: 
+      radial-gradient(ellipse at 20% 0%, hsl(var(--neon-purple) / 0.1) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, hsl(var(--neon-cyan) / 0.1) 0%, transparent 50%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.3);
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  /* Glitch Effect */
+  .glitch {
+    position: relative;
+    animation: glitch-skew 1s infinite linear alternate-reverse;
+  }
+
+  .glitch::before,
+  .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .glitch::before {
+    left: 2px;
+    text-shadow: -2px 0 hsl(var(--neon-cyan));
+    clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+    animation: glitch-anim 2s infinite linear alternate-reverse;
+  }
+
+  .glitch::after {
+    left: -2px;
+    text-shadow: 2px 0 hsl(var(--neon-purple));
+    clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%);
+    animation: glitch-anim2 1s infinite linear alternate-reverse;
+  }
+
+  @keyframes glitch-anim {
+    0% { clip-path: polygon(0 2%, 100% 2%, 100% 5%, 0 5%); }
+    10% { clip-path: polygon(0 15%, 100% 15%, 100% 15%, 0 15%); }
+    20% { clip-path: polygon(0 10%, 100% 10%, 100% 20%, 0 20%); }
+    30% { clip-path: polygon(0 1%, 100% 1%, 100% 2%, 0 2%); }
+    40% { clip-path: polygon(0 33%, 100% 33%, 100% 33%, 0 33%); }
+    50% { clip-path: polygon(0 44%, 100% 44%, 100% 44%, 0 44%); }
+    60% { clip-path: polygon(0 50%, 100% 50%, 100% 20%, 0 20%); }
+    70% { clip-path: polygon(0 70%, 100% 70%, 100% 70%, 0 70%); }
+    80% { clip-path: polygon(0 80%, 100% 80%, 100% 80%, 0 80%); }
+    90% { clip-path: polygon(0 50%, 100% 50%, 100% 55%, 0 55%); }
+    100% { clip-path: polygon(0 70%, 100% 70%, 100% 80%, 0 80%); }
+  }
+
+  @keyframes glitch-anim2 {
+    0% { clip-path: polygon(0 25%, 100% 25%, 100% 30%, 0 30%); }
+    15% { clip-path: polygon(0 3%, 100% 3%, 100% 3%, 0 3%); }
+    22% { clip-path: polygon(0 5%, 100% 5%, 100% 20%, 0 20%); }
+    31% { clip-path: polygon(0 20%, 100% 20%, 100% 20%, 0 20%); }
+    45% { clip-path: polygon(0 40%, 100% 40%, 100% 40%, 0 40%); }
+    51% { clip-path: polygon(0 52%, 100% 52%, 100% 59%, 0 59%); }
+    63% { clip-path: polygon(0 60%, 100% 60%, 100% 60%, 0 60%); }
+    76% { clip-path: polygon(0 75%, 100% 75%, 100% 75%, 0 75%); }
+    81% { clip-path: polygon(0 65%, 100% 65%, 100% 40%, 0 40%); }
+    94% { clip-path: polygon(0 45%, 100% 45%, 100% 50%, 0 50%); }
+    100% { clip-path: polygon(0 14%, 100% 14%, 100% 33%, 0 33%); }
+  }
+
+  @keyframes glitch-skew {
+    0% { transform: skew(0deg); }
+    10% { transform: skew(-2deg); }
+    20% { transform: skew(0deg); }
+    30% { transform: skew(1deg); }
+    40% { transform: skew(0deg); }
+    50% { transform: skew(-1deg); }
+    60% { transform: skew(0deg); }
+    70% { transform: skew(2deg); }
+    80% { transform: skew(0deg); }
+    90% { transform: skew(-1deg); }
+    100% { transform: skew(0deg); }
+  }
+
+  /* RGB Border Animation */
+  .rgb-border {
+    position: relative;
+    background: hsl(var(--card));
+    z-index: 1;
+  }
+
+  .rgb-border::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    background: var(--gradient-rgb);
+    background-size: 400% 400%;
+    z-index: -1;
+    border-radius: inherit;
+    animation: rgb-shift 3s linear infinite;
+  }
+
+  @keyframes rgb-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Neon Glow */
+  .neon-glow-cyan {
+    box-shadow: var(--glow-cyan);
+  }
+
+  .neon-glow-purple {
+    box-shadow: var(--glow-purple);
+  }
+
+  .neon-glow-green {
+    box-shadow: var(--glow-green);
+  }
+
+  .text-glow-cyan {
+    text-shadow: 0 0 10px hsl(var(--neon-cyan)), 0 0 20px hsl(var(--neon-cyan) / 0.5);
+  }
+
+  .text-glow-purple {
+    text-shadow: 0 0 10px hsl(var(--neon-purple)), 0 0 20px hsl(var(--neon-purple) / 0.5);
+  }
+
+  /* Scanlines */
+  .scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      hsl(0 0% 0% / 0.03) 2px,
+      hsl(0 0% 0% / 0.03) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* Cyber Grid */
+  .cyber-grid {
+    background-image: 
+      linear-gradient(hsl(var(--neon-cyan) / 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--neon-cyan) / 0.05) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  /* Floating Animation */
+  .float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+
+  /* Pulse Animation */
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { 
+      box-shadow: 0 0 20px hsl(var(--primary) / 0.5);
+    }
+    50% { 
+      box-shadow: 0 0 40px hsl(var(--primary) / 0.8), 0 0 60px hsl(var(--primary) / 0.4);
+    }
+  }
+
+  /* Streak Effect */
+  .streak {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .streak::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.3), transparent);
+    animation: streak 3s ease-in-out infinite;
+  }
+
+  @keyframes streak {
+    0% { left: -100%; }
+    50%, 100% { left: 200%; }
+  }
+}
+
+@layer utilities {
+  .font-orbitron {
+    font-family: 'Orbitron', sans-serif;
+  }
+
+  .font-rajdhani {
+    font-family: 'Rajdhani', sans-serif;
+  }
+
+  .font-mono-tech {
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, hsl(var(--neon-cyan)), hsl(var(--neon-purple)));
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, hsl(var(--neon-cyan) / 0.8), hsl(var(--neon-purple) / 0.8));
+  }
+}
