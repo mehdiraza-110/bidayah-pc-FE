@@ -20,35 +20,44 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { NeonCard } from '@/components/ui/NeonCard';
-import { pcComponents, componentCategories, ComponentCategory, PCComponent } from '@/data/pcComponents';
+import {
+  getPublicPCBuilderOptions,
+  getPublicPCBuilderProducts,
+  type Category,
+  type Product as ApiProduct,
+  type Vendor,
+} from '@/services/api';
 import { useCartStore } from '@/store/cartStore';
 import { cn } from '@/lib/utils';
 
-const categoryIcons = {
-  CPU: Cpu,
-  GPU: Monitor,
-  Motherboard: Settings,
-  RAM: Zap,
-  Storage: HardDrive,
-  PSU: Zap,
-  Case: Box,
-  Cooling: Wind,
+const getCategoryIcon = (categoryName: string) => {
+  const normalized = categoryName.toLowerCase();
+
+  if (normalized.includes('cpu') || normalized.includes('processor')) return Cpu;
+  if (normalized.includes('gpu') || normalized.includes('graphic')) return Monitor;
+  if (normalized.includes('motherboard')) return Settings;
+  if (normalized.includes('ram') || normalized.includes('memory')) return Zap;
+  if (normalized.includes('storage') || normalized.includes('ssd') || normalized.includes('hard')) return HardDrive;
+  if (normalized.includes('psu') || normalized.includes('power')) return Zap;
+  if (normalized.includes('case') || normalized.includes('chassis')) return Box;
+  if (normalized.includes('cool')) return Wind;
+
+  return Settings;
 };
 
 const PCBuilderPage: React.FC = () => {
   const navigate = useNavigate();
   const { addItem } = useCartStore();
-  const [selectedComponents, setSelectedComponents] = useState<Record<ComponentCategory, PCComponent | null>>({
-    CPU: null,
-    GPU: null,
-    Motherboard: null,
-    RAM: null,
-    Storage: null,
-    PSU: null,
-    Case: null,
-    Cooling: null,
-  });
-  const [activeCategory, setActiveCategory] = useState<ComponentCategory>('CPU');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [products, setProducts] = useState<ApiProduct[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<Record<string, ApiProduct | null>>({});
+  const [selectedVendors, setSelectedVendors] = useState<Record<string, Vendor | null>>({});
+  const [activeCategoryId, setActiveCategoryId] = useState('');
+  const [isOptionsLoading, setIsOptionsLoading] = useState(true);
+  const [isProductsLoading, setIsProductsLoading] = useState(false);
+  const [optionsError, setOptionsError] = useState('');
+  const [productsError, setProductsError] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,44 +73,118 @@ const PCBuilderPage: React.FC = () => {
     }
   }, []);
 
-  const handleSelectComponent = (component: PCComponent) => {
-    setSelectedComponents(prev => ({
+  useEffect(() => {
+    const loadOptions = async () => {
+      setIsOptionsLoading(true);
+      setOptionsError('');
+      const response = await getPublicPCBuilderOptions();
+
+      if (response.success && response.data) {
+        setCategories(response.data.categories || []);
+        setVendors(response.data.vendors || []);
+        setActiveCategoryId(response.data.categories?.[0]?.id || '');
+      } else {
+        setOptionsError(response.message || 'Failed to load builder options.');
+      }
+
+      setIsOptionsLoading(false);
+    };
+
+    loadOptions();
+  }, []);
+
+  const activeCategory = categories.find(category => category.id === activeCategoryId);
+  const selectedActiveVendor = selectedVendors[activeCategoryId];
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      if (!activeCategoryId || !selectedVendors[activeCategoryId]) {
+        setProducts([]);
+        setProductsError('');
+        return;
+      }
+
+      setIsProductsLoading(true);
+      setProductsError('');
+
+      const response = await getPublicPCBuilderProducts({
+        selected_category_id: activeCategoryId,
+        selected_vendor_id: selectedVendors[activeCategoryId]?.id,
+        in_stock: true,
+      });
+
+      if (response.success && response.data) {
+        setProducts(response.data);
+      } else {
+        setProducts([]);
+        setProductsError(response.message || 'Failed to load builder products.');
+      }
+
+      setIsProductsLoading(false);
+    };
+
+    loadProducts();
+  }, [activeCategoryId, selectedVendors]);
+
+  const handleSelectProduct = (product: ApiProduct) => {
+    const categoryId = product.category_id || activeCategoryId;
+
+    setSelectedProducts(prev => ({
       ...prev,
-      [component.category]: component,
+      [categoryId]: product,
     }));
   };
 
-  const handleRemoveComponent = (category: ComponentCategory) => {
-    setSelectedComponents(prev => ({
+  const handleSelectVendor = (vendor: Vendor) => {
+    setSelectedVendors(prev => ({
       ...prev,
-      [category]: null,
+      [activeCategoryId]: vendor,
+    }));
+    setSelectedProducts(prev => ({
+      ...prev,
+      [activeCategoryId]: null,
+    }));
+  };
+
+  const handleRemoveProduct = (categoryId: string) => {
+    setSelectedProducts(prev => ({
+      ...prev,
+      [categoryId]: null,
     }));
   };
 
   const getTotalPrice = () => {
-    return Object.values(selectedComponents).reduce((total, component) => {
-      return total + (component?.price || 0);
+    return Object.values(selectedProducts).reduce((total, product) => {
+      return total + Number(product?.price || 0);
     }, 0);
   };
 
   const isBuildComplete = () => {
-    return Object.values(selectedComponents).every(component => component !== null);
+    return categories.length > 0 && categories.every(category =>
+      selectedProducts[category.id] !== null && selectedProducts[category.id] !== undefined
+    );
   };
 
   const handleAddToCart = () => {
-    const components = Object.values(selectedComponents).filter(Boolean) as PCComponent[];
-    if (components.length === 0) return;
+    const selectedItems = categories
+      .map(category => selectedProducts[category.id])
+      .filter(Boolean) as ApiProduct[];
+    if (selectedItems.length === 0) return;
 
-    // Create a custom build product
     const customBuild = {
       id: `custom-build-${Date.now()}`,
       name: 'Custom PC Build',
       category: 'Gaming PC',
       price: getTotalPrice(),
-      image: selectedComponents.Case?.image || 'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?w=600',
-      specs: components.map(c => c.name),
+      image: selectedItems[0]?.image || 'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?w=600',
+      specs: selectedItems.map(product => {
+        const categoryName = product.category_name || categories.find(category => category.id === product.category_id)?.category_name || 'Component';
+        const vendor = selectedVendors[product.category_id || ''];
+        return vendor ? `${categoryName}: ${product.name} (${vendor.vendor_name})` : `${categoryName}: ${product.name}`;
+      }),
       rating: 5.0,
       reviews: 0,
+      stock: 1,
       inStock: true,
       featured: false,
     };
@@ -110,8 +193,8 @@ const PCBuilderPage: React.FC = () => {
     navigate('/checkout');
   };
 
-  const currentComponents = pcComponents[activeCategory];
   const totalPrice = getTotalPrice();
+  const productsRemaining = categories.filter(category => !selectedProducts[category.id]).length;
 
   return (
     <motion.div
@@ -123,7 +206,7 @@ const PCBuilderPage: React.FC = () => {
     >
       <Navbar />
 
-      <main className="pt-28 pb-16">
+      <main className="pt-12 pb-16">
         <div className="container mx-auto px-4 max-w-7xl">
           {/* Header */}
           <div className="mb-8">
@@ -139,113 +222,190 @@ const PCBuilderPage: React.FC = () => {
             {/* Left Column - Component Selection */}
             <div className="lg:col-span-2 space-y-6">
               {/* Category Tabs */}
-              <NeonCard className="p-4" glowColor="cyan">
-                <div className="flex flex-wrap gap-2">
-                  {componentCategories.map((category) => {
-                    const Icon = categoryIcons[category];
-                    const isSelected = selectedComponents[category] !== null;
-                    const isActive = activeCategory === category;
+              <NeonCard className="p-4" glowColor="cyan" hover={false}>
+                {isOptionsLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading builder options...</div>
+                ) : optionsError ? (
+                  <div className="text-sm text-destructive">{optionsError}</div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {categories.map((category) => {
+                      const Icon = getCategoryIcon(category.category_name);
+                      const isSelected = selectedProducts[category.id] !== null && selectedProducts[category.id] !== undefined;
+                      const isActive = activeCategoryId === category.id;
 
-                    return (
-                      <motion.button
-                        key={category}
-                        onClick={() => setActiveCategory(category)}
-                        className={cn(
-                          "flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all",
-                          isActive
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border hover:border-primary/50 text-foreground/70 hover:text-foreground",
-                          isSelected && "ring-2 ring-accent/50"
-                        )}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <Icon className="w-4 h-4" />
-                        <span className="font-rajdhani font-semibold">{category}</span>
-                        {isSelected && (
-                          <Check className="w-4 h-4 text-accent" />
-                        )}
-                      </motion.button>
-                    );
-                  })}
+                      return (
+                        <motion.button
+                          key={category.id}
+                          onClick={() => setActiveCategoryId(category.id)}
+                          className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all",
+                            isActive
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border hover:border-primary/50 text-foreground/70 hover:text-foreground",
+                            isSelected && "ring-2 ring-accent/50"
+                          )}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span className="font-rajdhani font-semibold">{category.category_name}</span>
+                          {isSelected && (
+                            <Check className="w-4 h-4 text-accent" />
+                          )}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                )}
+              </NeonCard>
+
+              {/* Vendor Selection */}
+              <NeonCard className="p-6" glowColor="green" hover={false}>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-accent/10 rounded-lg">
+                    <Settings className="w-5 h-5 text-accent" />
+                  </div>
+                  <div>
+                    <h2 className="font-orbitron text-xl font-bold">
+                      SELECT {activeCategory?.category_name || 'CATEGORY'} VENDOR
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Choose a vendor before selecting your {activeCategory?.category_name || 'product'}.
+                    </p>
+                  </div>
                 </div>
+
+                {vendors.length === 0 ? (
+                  <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                    No vendors are available.
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {vendors.map((vendor) => {
+                      const isSelected = selectedActiveVendor?.id === vendor.id;
+
+                      return (
+                        <motion.button
+                          key={vendor.id}
+                          type="button"
+                          onClick={() => handleSelectVendor(vendor)}
+                          className={cn(
+                            "flex items-center justify-between rounded-lg border-2 p-4 text-left transition-all",
+                            isSelected
+                              ? "border-accent bg-accent/10 text-accent"
+                              : "border-border hover:border-accent/60 hover:bg-muted/30"
+                          )}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <span className="font-rajdhani font-semibold">{vendor.vendor_name}</span>
+                          {isSelected && <Check className="w-4 h-4" />}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                )}
               </NeonCard>
 
               {/* Component List */}
-              <NeonCard className="p-6" glowColor="purple">
+              <NeonCard className="p-6" glowColor="purple" hover={false}>
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 bg-primary/10 rounded-lg">
-                    {React.createElement(categoryIcons[activeCategory], {
+                    {React.createElement(getCategoryIcon(activeCategory?.category_name || ''), {
                       className: 'w-5 h-5 text-primary',
                     })}
                   </div>
                   <h2 className="font-orbitron text-xl font-bold">
-                    SELECT {activeCategory}
+                    SELECT {activeCategory?.category_name || 'PRODUCT'}
                   </h2>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
-                  <AnimatePresence mode="wait">
-                    {currentComponents.map((component, index) => {
-                      const isSelected = selectedComponents[activeCategory]?.id === component.id;
+                {isProductsLoading ? (
+                  <div className="rounded-lg border border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+                    Loading products...
+                  </div>
+                ) : productsError ? (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-6 text-sm text-destructive">
+                    {productsError}
+                  </div>
+                ) : !selectedActiveVendor ? (
+                  <div className="rounded-lg border border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+                    Select a vendor to load products for this category.
+                  </div>
+                ) : products.length === 0 ? (
+                  <div className="rounded-lg border border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+                    No products found for this category and vendor selection.
+                  </div>
+                ) : (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <AnimatePresence mode="wait">
+                      {products.map((product, index) => {
+                        const productCategoryId = product.category_id || activeCategoryId;
+                        const isSelected = selectedProducts[productCategoryId]?.id === product.id;
+                        const specs = product.specs?.map(spec => spec.spec_text) || [];
 
-                      return (
-                        <motion.div
-                          key={component.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -20 }}
-                          transition={{ delay: index * 0.05 }}
-                          onClick={() => handleSelectComponent(component)}
-                          className={cn(
-                            "relative p-4 rounded-lg border-2 cursor-pointer transition-all group",
-                            isSelected
-                              ? "border-primary bg-primary/10 shadow-[0_0_20px_hsl(var(--neon-cyan)/0.3)]"
-                              : "border-border hover:border-primary/50 hover:bg-muted/30"
-                          )}
-                          whileHover={{ scale: 1.02, y: -2 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          {isSelected && (
-                            <div className="absolute top-2 right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                              <Check className="w-4 h-4 text-primary-foreground" />
-                            </div>
-                          )}
-
-                          <div className="flex gap-4">
-                            <img
-                              src={component.image}
-                              alt={component.name}
-                              className="w-20 h-20 object-cover rounded-lg"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-rajdhani font-semibold text-sm mb-1 truncate">
-                                {component.name}
-                              </h3>
-                              <div className="space-y-1 mb-2">
-                                {component.specs.slice(0, 2).map((spec, i) => (
-                                  <p key={i} className="text-xs text-muted-foreground">
-                                    {spec}
-                                  </p>
-                                ))}
+                        return (
+                          <motion.div
+                            key={product.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ delay: index * 0.05 }}
+                            onClick={() => handleSelectProduct(product)}
+                            className={cn(
+                              "relative p-4 rounded-lg border-2 cursor-pointer transition-all group",
+                              isSelected
+                                ? "border-primary bg-primary/10 shadow-[0_0_20px_hsl(var(--neon-cyan)/0.3)]"
+                                : "border-border hover:border-primary/50 hover:bg-muted/30"
+                            )}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            {isSelected && (
+                              <div className="absolute top-2 right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                                <Check className="w-4 h-4 text-primary-foreground" />
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-primary font-orbitron text-lg font-bold">
-                                  AED {component.price.toLocaleString()}
-                                </span>
-                                <div className="flex items-center gap-1">
-                                  <span className="text-xs text-muted-foreground">
-                                    {component.rating}★
+                            )}
+
+                            <div className="flex gap-4">
+                              <img
+                                src={product.image}
+                                alt={product.name}
+                                className="w-20 h-20 object-cover rounded-lg"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-rajdhani font-semibold text-sm mb-1 truncate">
+                                  {product.name}
+                                </h3>
+                                <div className="space-y-1 mb-2">
+                                  {specs.slice(0, 2).map((spec, i) => (
+                                    <p key={i} className="text-xs text-muted-foreground">
+                                      {spec}
+                                    </p>
+                                  ))}
+                                  {specs.length === 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {product.category_name || activeCategory?.category_name}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-primary font-orbitron text-lg font-bold">
+                                    AED {Number(product.price).toLocaleString()}
                                   </span>
+                                  {product.in_stock !== undefined && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {product.in_stock ? 'In stock' : 'Out of stock'}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </AnimatePresence>
-                </div>
+                          </motion.div>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </div>
+                )}
               </NeonCard>
             </div>
 
@@ -262,15 +422,16 @@ const PCBuilderPage: React.FC = () => {
 
                   {/* Selected Components */}
                   <div className="space-y-3 mb-6 max-h-96 overflow-y-auto">
-                    {componentCategories.map((category) => {
-                      const component = selectedComponents[category];
-                      const Icon = categoryIcons[category];
+                    {categories.map((category) => {
+                      const product = selectedProducts[category.id];
+                      const vendor = selectedVendors[category.id];
+                      const Icon = getCategoryIcon(category.category_name);
 
-                      if (!component) return null;
+                      if (!product) return null;
 
                       return (
                         <motion.div
-                          key={category}
+                          key={category.id}
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           className="flex items-start gap-3 p-3 bg-muted/30 rounded-lg group"
@@ -279,16 +440,21 @@ const PCBuilderPage: React.FC = () => {
                             <Icon className="w-4 h-4 text-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs text-muted-foreground mb-1">{category}</p>
+                            <p className="text-xs text-muted-foreground mb-1">{category.category_name}</p>
                             <p className="font-rajdhani font-semibold text-sm truncate">
-                              {component.name}
+                              {product.name}
                             </p>
+                            {vendor && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Vendor: {vendor.vendor_name}
+                              </p>
+                            )}
                             <p className="text-primary font-orbitron text-sm mt-1">
-                              AED {component.price.toLocaleString()}
+                              AED {Number(product.price).toLocaleString()}
                             </p>
                           </div>
                           <motion.button
-                            onClick={() => handleRemoveComponent(category)}
+                            onClick={() => handleRemoveProduct(category.id)}
                             className="opacity-0 group-hover:opacity-100 p-1 text-destructive hover:bg-destructive/20 rounded transition-all"
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
@@ -299,7 +465,7 @@ const PCBuilderPage: React.FC = () => {
                       );
                     })}
 
-                    {Object.values(selectedComponents).every(c => c === null) && (
+                    {Object.values(selectedProducts).every(product => !product) && (
                       <div className="text-center py-8 text-muted-foreground">
                         <AlertCircle className="w-12 h-12 mx-auto mb-2 opacity-30" />
                         <p className="text-sm">No components selected</p>
@@ -340,7 +506,7 @@ const PCBuilderPage: React.FC = () => {
                         <>
                           <AlertCircle className="w-5 h-5 text-muted-foreground" />
                           <span className="text-sm font-semibold text-muted-foreground">
-                            {componentCategories.filter(c => selectedComponents[c] === null).length} components remaining
+                            {productsRemaining} components remaining
                           </span>
                         </>
                       )}
@@ -348,7 +514,7 @@ const PCBuilderPage: React.FC = () => {
                     <p className="text-xs text-muted-foreground">
                       {isBuildComplete()
                         ? 'Your build is ready! Add to cart to proceed.'
-                        : 'Select all components to complete your build.'}
+                        : 'Select all components and vendors to complete your build.'}
                     </p>
                   </div>
 
@@ -371,16 +537,8 @@ const PCBuilderPage: React.FC = () => {
                         size="lg"
                         className="w-full"
                         onClick={() => {
-                          setSelectedComponents({
-                            CPU: null,
-                            GPU: null,
-                            Motherboard: null,
-                            RAM: null,
-                            Storage: null,
-                            PSU: null,
-                            Case: null,
-                            Cooling: null,
-                          });
+                          setSelectedProducts({});
+                          setSelectedVendors({});
                         }}
                       >
                         CLEAR BUILD
@@ -405,4 +563,3 @@ const PCBuilderPage: React.FC = () => {
 };
 
 export default PCBuilderPage;
-

@@ -1,0 +1,60 @@
+.rich-text-editor .jodit-container,
+.rich-text-editor .jodit-workplace,
+.rich-text-editor .jodit-wysiwyg {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.rich-text-editor .jodit-container {
+  border: 0;
+  font-family: 'Rajdhani', sans-serif;
+}
+
+.rich-text-editor .jodit-toolbar__box,
+.rich-text-editor .jodit-status-bar {
+  background: hsl(var(--muted) / 0.45);
+  border-color: hsl(var(--border));
+}
+
+.rich-text-editor .jodit-wysiwyg {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.rich-text-editor .jodit-wysiwyg p,
+.rich-text-editor .jodit-wysiwyg div,
+.rich-text-editor .jodit-wysiwyg span,
+.rich-text-editor .jodit-wysiwyg li {
+  color: inherit;
+}
+
+.rich-text-editor .jodit-wysiwyg ul,
+.rich-text-editor .jodit-wysiwyg ol {
+  margin: 0.75rem 0 0.75rem 1.5rem;
+  padding-left: 1.25rem;
+}
+
+.rich-text-editor .jodit-wysiwyg ul {
+  list-style: disc outside;
+}
+
+.rich-text-editor .jodit-wysiwyg ol {
+  list-style: decimal outside;
+}
+
+.rich-text-editor .jodit-wysiwyg li {
+  display: list-item;
+  padding-left: 0.25rem;
+}
+
+.rich-text-editor .jodit-wysiwyg li::marker {
+  color: currentColor;
+}
+
+.rich-text-editor .jodit-wysiwyg a {
+  color: hsl(var(--primary));
+}
+
+.rich-text-editor .jodit-placeholder {
+  color: hsl(var(--muted-foreground));
+}

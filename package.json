@@ -49,6 +49,8 @@
     "framer-motion": "^12.23.25",
     "gsap": "^3.13.0",
     "input-otp": "^1.4.2",
+    "jodit": "^4.12.2",
+    "jodit-react": "^5.3.21",
     "jspdf": "^4.0.0",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",

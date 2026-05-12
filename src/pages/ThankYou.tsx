@@ -65,7 +65,7 @@ const ThankYouPage: React.FC = () => {
     >
       <Navbar />
 
-      <main className="pt-28 pb-16 min-h-screen flex items-center justify-center px-4" ref={containerRef}>
+      <main className="pt-12 pb-16 min-h-screen flex items-center justify-center px-4" ref={containerRef}>
         <div className="max-w-2xl w-full">
           <NeonCard className="p-8 md:p-12 text-center" glowColor="green" hover={false}>
             {/* Success Icon */}

@@ -4,9 +4,11 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import CartDrawer from '@/components/layout/CartDrawer';
 import HeroSection from '@/components/sections/HeroSection';
+import HomeHighlightsSection from '@/components/sections/HomeHighlightsSection';
 import FeaturedSection from '@/components/sections/FeaturedSection';
 import FeaturesSection from '@/components/sections/FeaturesSection';
 import CategoriesSection from '@/components/sections/CategoriesSection';
+import BlogFaqSection from '@/components/sections/BlogFaqSection';
 
 const Index: React.FC = () => {
   return (
@@ -21,9 +23,11 @@ const Index: React.FC = () => {
       
       <main>
         <HeroSection />
+        <HomeHighlightsSection />
         <FeaturedSection />
         <CategoriesSection />
         <FeaturesSection />
+        <BlogFaqSection />
       </main>
 
       <Footer />

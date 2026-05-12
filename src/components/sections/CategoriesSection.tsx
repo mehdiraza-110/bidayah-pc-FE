@@ -206,20 +206,6 @@ const CategoriesSection: React.FC = () => {
                     
                     {/* Content */}
                     <div className="absolute bottom-0 left-0 right-0 p-6">
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${
-                        color === 'cyan' ? 'bg-primary/20' :
-                        color === 'purple' ? 'bg-secondary/20' :
-                        'bg-accent/20'
-                      }`}>
-                        <span className={`text-2xl ${
-                          color === 'cyan' ? 'text-primary' :
-                          color === 'purple' ? 'text-secondary' :
-                          'text-accent'
-                        }`}>
-                          {category.category_name.charAt(0)}
-                        </span>
-                      </div>
-                      
                       <h3 className="font-orbitron text-2xl font-bold text-foreground mb-1">
                         {category.category_name}
                       </h3>

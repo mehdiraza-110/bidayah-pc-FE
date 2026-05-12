@@ -79,7 +79,13 @@ const ProductsPage: React.FC = () => {
         }
 
         // Load products with filters from URL params
-        const filters: any = {};
+        const filters: {
+          category_id?: string;
+          vendor_id?: string;
+          featured?: boolean;
+          in_stock?: boolean;
+          search?: string;
+        } = {};
         if (activeCategoryId) filters.category_id = activeCategoryId;
         if (activeVendorId) filters.vendor_id = activeVendorId;
         if (searchParams.get('search')) filters.search = searchParams.get('search');
@@ -161,7 +167,7 @@ const ProductsPage: React.FC = () => {
       <Navbar />
       <CartDrawer />
 
-      <main className="pt-28 pb-16">
+      <main className="pt-12 pb-16">
         <div className="container mx-auto px-4">
           {/* Header */}
           <GSAPScrollReveal animation="fadeUp">

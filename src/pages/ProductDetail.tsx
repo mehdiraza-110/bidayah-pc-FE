@@ -27,6 +27,30 @@ import { ProductCarousel } from '@/components/products/ProductCarousel';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
+const sanitizeRichText = (html?: string) => {
+  if (!html || typeof window === 'undefined') return '';
+
+  const document = new DOMParser().parseFromString(html, 'text/html');
+  const blockedTags = ['script', 'style', 'iframe', 'object', 'embed'];
+
+  blockedTags.forEach((tag) => {
+    document.querySelectorAll(tag).forEach((element) => element.remove());
+  });
+
+  document.body.querySelectorAll('*').forEach((element) => {
+    Array.from(element.attributes).forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim().toLowerCase();
+
+      if (name.startsWith('on') || ((name === 'href' || name === 'src') && value.startsWith('javascript:'))) {
+        element.removeAttribute(attribute.name);
+      }
+    });
+  });
+
+  return document.body.innerHTML;
+};
+
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
@@ -178,7 +202,7 @@ const ProductDetailPage: React.FC = () => {
       <Navbar />
       <CartDrawer />
 
-      <main className="pt-28 pb-16">
+      <main className="pt-12 pb-16">
         <div className="container mx-auto px-4">
           {/* Breadcrumb */}
           <motion.div
@@ -197,7 +221,7 @@ const ProductDetailPage: React.FC = () => {
           <div className="grid lg:grid-cols-2 gap-12">
             {/* Image Gallery */}
             <div ref={imageRef}>
-              <NeonCard className="p-4 mb-4" glowColor="cyan">
+              <NeonCard className="p-4 mb-4" glowColor="cyan" hover={false}>
                 <div className="aspect-square overflow-hidden rounded-lg bg-muted">
                   {images.length > 0 && (
                     <motion.img
@@ -235,7 +259,7 @@ const ProductDetailPage: React.FC = () => {
             </div>
 
             {/* Product Info */}
-            <div ref={contentRef}>
+            <div ref={contentRef} className="flex h-full flex-col justify-center">
               <div className="animate-item flex items-center gap-3 mb-4">
                 <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-mono-tech uppercase rounded">
                   {product.category}
@@ -298,28 +322,10 @@ const ProductDetailPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Specs */}
-              <div className="animate-item mb-8">
-                <h3 className="font-orbitron text-lg font-bold mb-4">Specifications</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {product.specs.map((spec, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.5 + i * 0.1 }}
-                      className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg"
-                    >
-                      <Check className="w-4 h-4 text-primary" />
-                      <span className="text-sm">{spec}</span>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-
+              <div className="space-y-8">
               {/* Quantity & Add to Cart - only show if in stock */}
               {product.in_stock !== false ? (
-                <div className="animate-item flex flex-col sm:flex-row gap-4 mb-8">
+                <div className="animate-item flex flex-col sm:flex-row gap-4">
                   <div className="flex items-center bg-muted rounded-lg">
                     <motion.button
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -370,7 +376,7 @@ const ProductDetailPage: React.FC = () => {
                   </motion.button>
                 </div>
               ) : (
-                <div className="animate-item flex gap-4 mb-8">
+                <div className="animate-item flex gap-4">
                   <motion.button
                     onClick={() => setIsWishlisted(!isWishlisted)}
                     className={cn(
@@ -411,17 +417,36 @@ const ProductDetailPage: React.FC = () => {
                   </div>
                 ))}
               </div>
+              </div>
             </div>
           </div>
 
-          {/* Related Products */}
-          {relatedProducts.length > 0 && (
-            <div className="mt-24">
-              <h2 className="font-orbitron text-3xl font-bold mb-8">
-                RELATED <span className="text-primary">PRODUCTS</span>
+          {/* Description */}
+          {product.description && (
+            <section className="mt-16">
+              <h2 className="font-orbitron text-2xl font-bold mb-5">
+                PRODUCT <span className="text-primary">DESCRIPTION</span>
               </h2>
+              <div
+                className="prose prose-invert max-w-none rounded-lg border border-border bg-muted/30 p-6 text-sm leading-relaxed text-muted-foreground prose-headings:font-orbitron prose-headings:text-foreground prose-a:text-primary prose-strong:text-foreground prose-ul:my-3 prose-ol:my-3 prose-li:my-1 md:p-8"
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(product.description) }}
+              />
+            </section>
+          )}
+
+          {/* Recommended Products */}
+          {relatedProducts.length > 0 && (
+            <section className="mt-16">
+              <div className="mb-8">
+                <h2 className="font-orbitron text-3xl font-bold">
+                  RECOMMENDED <span className="text-primary">PRODUCTS</span>
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Relevant picks from the same category.
+                </p>
+              </div>
               <ProductCarousel products={relatedProducts} />
-            </div>
+            </section>
           )}
         </div>
       </main>

@@ -36,12 +36,21 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  getKeyFeatures,
   type Vendor, 
   type Category,
-  type Product as ApiProduct
+  type Product as ApiProduct,
+  type KeyFeature,
+  type ProductKeyFeatureInput
 } from '@/services/api';
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import { cn } from '@/lib/utils';
+
+type KeyFeatureFormRow = {
+  key_feature_id: string;
+  feature_key: string;
+  value: string;
+};
 
 const AdminProductsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -86,6 +95,9 @@ const AdminProductsPage: React.FC = () => {
   const [mediaFiles, setMediaFiles] = useState<(File | null)[]>(Array(5).fill(null));
   const [mediaPreviews, setMediaPreviews] = useState<(ProductMedia | null)[]>(Array(5).fill(null));
   const [specInput, setSpecInput] = useState('');
+  const [keyFeatureOptions, setKeyFeatureOptions] = useState<KeyFeature[]>([]);
+  const [keyFeatureRows, setKeyFeatureRows] = useState<KeyFeatureFormRow[]>([]);
+  const [isKeyFeaturesLoading, setIsKeyFeaturesLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -185,6 +197,13 @@ const AdminProductsPage: React.FC = () => {
           setMediaPreviews(previews);
           // Set specs
           setSpecInput(product.specs.join(', '));
+          setKeyFeatureRows(
+            (response.data.key_features || []).map((feature) => ({
+              key_feature_id: feature.key_feature_id || '',
+              feature_key: feature.feature_key || '',
+              value: feature.feature_value || '',
+            }))
+          );
         } else {
           toast.error(response.message || 'Product not found');
           navigate('/admin/products');
@@ -193,6 +212,32 @@ const AdminProductsPage: React.FC = () => {
       loadProduct();
     }
   }, [id, isEditing, navigate]);
+
+  useEffect(() => {
+    const loadKeyFeatures = async () => {
+      if (!formData.category_id) {
+        setKeyFeatureOptions([]);
+        return;
+      }
+
+      setIsKeyFeaturesLoading(true);
+      const response = await getKeyFeatures({
+        category_id: formData.category_id,
+        is_active: true,
+      });
+
+      if (response.success && response.data) {
+        setKeyFeatureOptions(response.data);
+      } else {
+        setKeyFeatureOptions([]);
+        toast.error(response.message || 'Failed to load key features');
+      }
+
+      setIsKeyFeaturesLoading(false);
+    };
+
+    loadKeyFeatures();
+  }, [formData.category_id]);
 
 
   const handleMediaUpload = (index: number, file: File | null) => {
@@ -297,6 +342,39 @@ const AdminProductsPage: React.FC = () => {
     }));
   };
 
+  const handleAddKeyFeatureRow = () => {
+    setKeyFeatureRows(prev => [...prev, { key_feature_id: '', feature_key: '', value: '' }]);
+  };
+
+  const handleKeyFeatureChange = (index: number, updates: Partial<KeyFeatureFormRow>) => {
+    setKeyFeatureRows(prev =>
+      prev.map((row, rowIndex) => (rowIndex === index ? { ...row, ...updates } : row))
+    );
+  };
+
+  const handleSelectKeyFeature = (index: number, keyFeatureId: string) => {
+    const selectedFeature = keyFeatureOptions.find(feature => feature.id === keyFeatureId);
+
+    handleKeyFeatureChange(index, {
+      key_feature_id: keyFeatureId,
+      feature_key: selectedFeature?.feature_key || '',
+    });
+  };
+
+  const handleRemoveKeyFeatureRow = (index: number) => {
+    setKeyFeatureRows(prev => prev.filter((_, rowIndex) => rowIndex !== index));
+  };
+
+  const buildKeyFeaturesPayload = (): ProductKeyFeatureInput[] => {
+    return keyFeatureRows
+      .map(row => ({
+        key_feature_id: row.key_feature_id || undefined,
+        feature_key: row.key_feature_id ? undefined : row.feature_key.trim(),
+        value: row.value.trim(),
+      }))
+      .filter(feature => feature.value && (feature.key_feature_id || feature.feature_key));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -324,6 +402,7 @@ const AdminProductsPage: React.FC = () => {
 
         // Get specs as array
         const specsArray = formData.specs || [];
+        const keyFeaturesPayload = buildKeyFeaturesPayload();
 
         if (isEditing && id) {
           // Update existing product
@@ -351,6 +430,8 @@ const AdminProductsPage: React.FC = () => {
           if (specsArray.length > 0) {
             updateData.specs = specsArray;
           }
+
+          updateData.key_features = keyFeaturesPayload;
 
           const response = await updateProduct(id, updateData);
           
@@ -381,6 +462,7 @@ const AdminProductsPage: React.FC = () => {
             setMediaFiles(Array(5).fill(null));
             setMediaPreviews(Array(5).fill(null));
             setSpecInput('');
+            setKeyFeatureRows([]);
             navigate('/admin/products');
           } else {
             toast.error(response.message || 'Failed to update product');
@@ -415,6 +497,10 @@ const AdminProductsPage: React.FC = () => {
             createData.specs = specsArray;
           }
 
+          if (keyFeaturesPayload.length > 0) {
+            createData.key_features = keyFeaturesPayload;
+          }
+
           const response = await createProduct(createData);
           
           if (response.success && response.data) {
@@ -442,6 +528,7 @@ const AdminProductsPage: React.FC = () => {
             setMediaFiles(Array(5).fill(null));
             setMediaPreviews(Array(5).fill(null));
             setSpecInput('');
+            setKeyFeatureRows([]);
             navigate('/admin/products');
           } else {
             toast.error(response.message || 'Failed to create product');
@@ -494,6 +581,7 @@ const AdminProductsPage: React.FC = () => {
     setMediaFiles(Array(5).fill(null));
     setMediaPreviews(Array(5).fill(null));
     setSpecInput('');
+    setKeyFeatureRows([]);
   };
 
   const handleStatusToggle = async (productId: string, currentStatus: 'published' | 'draft' | undefined) => {
@@ -616,11 +704,14 @@ const AdminProductsPage: React.FC = () => {
                         <select
                           id="category_id"
                           value={formData.category_id || ''}
-                          onChange={(e) => setFormData(prev => ({ 
-                            ...prev, 
-                            category_id: e.target.value || undefined,
-                            category: categoryList.find(c => c.id === e.target.value)?.category_name || ''
-                          }))}
+                          onChange={(e) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              category_id: e.target.value || undefined,
+                              category: categoryList.find(c => c.id === e.target.value)?.category_name || ''
+                            }));
+                            setKeyFeatureRows([]);
+                          }}
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
                           <option value="">Select a category</option>
@@ -809,6 +900,94 @@ const AdminProductsPage: React.FC = () => {
                       ))}
                     </div>
                   </div>
+
+                  {/* Key Features */}
+                  {formData.category_id && (
+                    <div>
+                      <div className="mb-4 flex items-center justify-between gap-4">
+                        <div>
+                          <h2 className="font-orbitron text-xl font-bold">KEY FEATURES</h2>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Select reusable category keys or add new keys, then enter product-specific values.
+                          </p>
+                        </div>
+                        <CyberButton type="button" onClick={handleAddKeyFeatureRow} size="md" variant="outline">
+                          <Plus className="w-4 h-4 mr-2" />
+                          ADD FEATURE
+                        </CyberButton>
+                      </div>
+
+                      {isKeyFeaturesLoading ? (
+                        <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                          Loading key features...
+                        </div>
+                      ) : keyFeatureRows.length === 0 ? (
+                        <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                          No key features added yet. Add a feature to create filterable product details.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {keyFeatureRows.map((row, index) => {
+                            const isCustomKey = !row.key_feature_id;
+
+                            return (
+                              <motion.div
+                                key={index}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="grid gap-3 rounded-lg border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+                              >
+                                <div>
+                                  <Label>Feature Key</Label>
+                                  <select
+                                    value={row.key_feature_id || ''}
+                                    onChange={(event) => handleSelectKeyFeature(index, event.target.value)}
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                  >
+                                    <option value="">New custom key</option>
+                                    {keyFeatureOptions.map((feature) => (
+                                      <option key={feature.id} value={feature.id}>
+                                        {feature.feature_key}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <Label>{isCustomKey ? 'New Key Name' : 'Selected Key'}</Label>
+                                  <Input
+                                    value={row.feature_key}
+                                    onChange={(event) => handleKeyFeatureChange(index, { feature_key: event.target.value })}
+                                    placeholder="Ram Speed"
+                                    disabled={!isCustomKey}
+                                  />
+                                </div>
+
+                                <div>
+                                  <Label>Value</Label>
+                                  <Input
+                                    value={row.value}
+                                    onChange={(event) => handleKeyFeatureChange(index, { value: event.target.value })}
+                                    placeholder="3200MHz"
+                                  />
+                                </div>
+
+                                <div className="flex items-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveKeyFeatureRow(index)}
+                                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-destructive text-destructive transition-colors hover:bg-destructive/10"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Stock */}
                   <div>
@@ -1169,4 +1348,3 @@ const AdminProductsPage: React.FC = () => {
 };
 
 export default AdminProductsPage;
-

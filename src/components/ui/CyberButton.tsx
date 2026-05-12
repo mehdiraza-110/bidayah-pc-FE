@@ -11,7 +11,7 @@ interface CyberButtonProps extends Omit<HTMLMotionProps<"button">, 'children'> {
 
 const CyberButton = React.forwardRef<HTMLButtonElement, CyberButtonProps>(
   ({ className, children, variant = 'primary', size = 'md', glowColor = 'cyan', ...props }, ref) => {
-    const baseStyles = "relative font-orbitron font-semibold uppercase tracking-wider overflow-hidden transition-all duration-300";
+    const baseStyles = "relative inline-flex items-center justify-center font-orbitron font-semibold uppercase tracking-wider overflow-hidden transition-all duration-300";
     
     const variants = {
       primary: "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -60,7 +60,9 @@ const CyberButton = React.forwardRef<HTMLButtonElement, CyberButtonProps>(
         <span className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-current opacity-50" />
         <span className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-current opacity-50" />
         
-        <span className="relative z-10">{children}</span>
+        <span className="relative z-10 inline-flex items-center justify-center gap-2 whitespace-nowrap [&_svg]:shrink-0">
+          {children}
+        </span>
       </motion.button>
     );
   }

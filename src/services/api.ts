@@ -136,6 +136,49 @@ export interface ProductSpec {
   display_order?: number;
 }
 
+export interface KeyFeature {
+  id: string;
+  category_id: string;
+  category_name?: string;
+  feature_key: string;
+  display_order?: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductKeyFeature {
+  id?: string;
+  key_feature_id?: string;
+  feature_key: string;
+  feature_value: string;
+  display_order?: number;
+}
+
+export interface ProductKeyFeatureInput {
+  key_feature_id?: string;
+  feature_key?: string;
+  value: string;
+}
+
+export interface CreateKeyFeatureRequest {
+  category_id: string;
+  feature_key: string;
+  display_order?: number;
+  is_active?: boolean;
+}
+
+export interface UpdateKeyFeatureRequest {
+  feature_key?: string;
+  display_order?: number;
+  is_active?: boolean;
+}
+
+export interface KeyFeatureFilters {
+  category_id?: string;
+  is_active?: boolean;
+}
+
 // Product interfaces
 export interface Product {
   id: string;
@@ -157,6 +200,7 @@ export interface Product {
   reviews_count?: number;
   media?: ProductMedia[];
   specs?: ProductSpec[];
+  key_features?: ProductKeyFeature[];
   created_at?: string;
   updated_at?: string;
 }
@@ -177,6 +221,7 @@ export interface CreateProductRequest {
   reviews_count?: number;
   media?: File[]; // Up to 5 files
   specs?: string | string[]; // Comma-separated string or array
+  key_features?: ProductKeyFeatureInput[];
 }
 
 export interface UpdateProductRequest {
@@ -195,6 +240,69 @@ export interface UpdateProductRequest {
   main_image?: File | string; // New main image
   media?: File[]; // Up to 5 files (replaces all existing)
   specs?: string | string[]; // Comma-separated string or array (replaces all existing)
+  key_features?: ProductKeyFeatureInput[];
+}
+
+// PC Builder Filter Rule interfaces
+export type SpecMatchMode = 'any' | 'all';
+
+export interface PCBuilderFilterRule {
+  id: string;
+  rule_name: string;
+  selected_category_id: string;
+  selected_vendor_id?: string | null;
+  result_category_id: string;
+  result_vendor_id?: string | null;
+  spec_match_terms?: string[];
+  spec_match_mode: SpecMatchMode;
+  priority: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreatePCBuilderFilterRuleRequest {
+  rule_name: string;
+  selected_category_id: string;
+  selected_vendor_id?: string | null;
+  result_category_id: string;
+  result_vendor_id?: string | null;
+  spec_match_terms?: string[];
+  spec_match_mode?: SpecMatchMode;
+  priority?: number;
+  is_active?: boolean;
+}
+
+export type UpdatePCBuilderFilterRuleRequest = Partial<CreatePCBuilderFilterRuleRequest>;
+
+export interface PCBuilderFilterRuleFilters {
+  selected_category_id?: string;
+  selected_vendor_id?: string;
+  result_category_id?: string;
+  result_vendor_id?: string;
+  is_active?: boolean;
+}
+
+export interface PreviewPCBuilderFilterRuleFilters {
+  selected_category_id?: string;
+  selected_vendor_id?: string;
+  result_category_id?: string;
+  status?: 'published' | 'draft';
+  in_stock?: boolean;
+}
+
+export interface PCBuilderOptions {
+  categories: Category[];
+  vendors: Vendor[];
+}
+
+export interface PublicPCBuilderProductFilters {
+  selected_category_id?: string;
+  category_id?: string;
+  selected_vendor_id?: string;
+  vendor_id?: string;
+  result_category_id?: string;
+  in_stock?: boolean;
 }
 
 // Get JWT token from localStorage
@@ -445,6 +553,51 @@ export const deleteCategory = async (id: string): Promise<ApiResponse<Category>>
   });
 };
 
+// Key Feature APIs
+const buildKeyFeatureQuery = (filters?: KeyFeatureFilters): string => {
+  const params = new URLSearchParams();
+  if (filters?.category_id) params.append('category_id', filters.category_id);
+  if (filters?.is_active !== undefined) params.append('is_active', String(filters.is_active));
+
+  const queryString = params.toString();
+  return queryString ? `?${queryString}` : '';
+};
+
+export const getKeyFeatures = async (filters?: KeyFeatureFilters): Promise<ApiResponse<KeyFeature[]>> => {
+  return apiRequest<KeyFeature[]>(`/key-features${buildKeyFeatureQuery(filters)}`, {
+    method: 'GET',
+  });
+};
+
+export const getKeyFeatureById = async (id: string): Promise<ApiResponse<KeyFeature>> => {
+  return apiRequest<KeyFeature>(`/key-features/${id}`, {
+    method: 'GET',
+  });
+};
+
+export const createKeyFeature = async (featureData: CreateKeyFeatureRequest): Promise<ApiResponse<KeyFeature>> => {
+  return apiRequest<KeyFeature>('/key-features', {
+    method: 'POST',
+    body: JSON.stringify(featureData),
+  });
+};
+
+export const updateKeyFeature = async (
+  id: string,
+  featureData: UpdateKeyFeatureRequest
+): Promise<ApiResponse<KeyFeature>> => {
+  return apiRequest<KeyFeature>(`/key-features/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(featureData),
+  });
+};
+
+export const deleteKeyFeature = async (id: string): Promise<ApiResponse<KeyFeature>> => {
+  return apiRequest<KeyFeature>(`/key-features/${id}`, {
+    method: 'DELETE',
+  });
+};
+
 // Product APIs
 
 // Get all products
@@ -522,6 +675,10 @@ export const createProduct = async (productData: CreateProductRequest): Promise<
     }
   }
 
+  if (productData.key_features) {
+    formData.append('key_features', JSON.stringify(productData.key_features));
+  }
+
   return apiRequest<Product>(
     '/products',
     {
@@ -575,6 +732,10 @@ export const updateProduct = async (id: string, productData: UpdateProductReques
     }
   }
 
+  if (productData.key_features) {
+    formData.append('key_features', JSON.stringify(productData.key_features));
+  }
+
   return apiRequest<Product>(
     `/products/${id}`,
     {
@@ -589,6 +750,89 @@ export const updateProduct = async (id: string, productData: UpdateProductReques
 export const deleteProduct = async (id: string): Promise<ApiResponse<Product>> => {
   return apiRequest<Product>(`/products/${id}`, {
     method: 'DELETE',
+  });
+};
+
+// PC Builder Filter Rule APIs
+const buildFilterRuleQuery = (
+  filters?: PCBuilderFilterRuleFilters | PreviewPCBuilderFilterRuleFilters
+): string => {
+  const params = new URLSearchParams();
+
+  if (filters?.selected_category_id) params.append('selected_category_id', filters.selected_category_id);
+  if (filters?.selected_vendor_id) params.append('selected_vendor_id', filters.selected_vendor_id);
+  if (filters?.result_category_id) params.append('result_category_id', filters.result_category_id);
+
+  if ('result_vendor_id' in (filters || {}) && filters?.result_vendor_id) {
+    params.append('result_vendor_id', filters.result_vendor_id);
+  }
+  if ('is_active' in (filters || {}) && filters?.is_active !== undefined) {
+    params.append('is_active', String(filters.is_active));
+  }
+  if ('status' in (filters || {}) && filters?.status) {
+    params.append('status', filters.status);
+  }
+  if ('in_stock' in (filters || {}) && filters?.in_stock !== undefined) {
+    params.append('in_stock', String(filters.in_stock));
+  }
+
+  const queryString = params.toString();
+  return queryString ? `?${queryString}` : '';
+};
+
+export const getPCBuilderFilterRules = async (
+  filters?: PCBuilderFilterRuleFilters
+): Promise<ApiResponse<PCBuilderFilterRule[]>> => {
+  return apiRequest<PCBuilderFilterRule[]>(`/pc-builder-filter-rules${buildFilterRuleQuery(filters)}`, {
+    method: 'GET',
+  });
+};
+
+export const getPCBuilderFilterRuleById = async (id: string): Promise<ApiResponse<PCBuilderFilterRule>> => {
+  return apiRequest<PCBuilderFilterRule>(`/pc-builder-filter-rules/${id}`, {
+    method: 'GET',
+  });
+};
+
+export const createPCBuilderFilterRule = async (
+  ruleData: CreatePCBuilderFilterRuleRequest
+): Promise<ApiResponse<PCBuilderFilterRule>> => {
+  return apiRequest<PCBuilderFilterRule>('/pc-builder-filter-rules', {
+    method: 'POST',
+    body: JSON.stringify(ruleData),
+  });
+};
+
+export const updatePCBuilderFilterRule = async (
+  id: string,
+  ruleData: UpdatePCBuilderFilterRuleRequest
+): Promise<ApiResponse<PCBuilderFilterRule>> => {
+  return apiRequest<PCBuilderFilterRule>(`/pc-builder-filter-rules/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(ruleData),
+  });
+};
+
+export const deletePCBuilderFilterRule = async (id: string): Promise<ApiResponse<PCBuilderFilterRule>> => {
+  return apiRequest<PCBuilderFilterRule>(`/pc-builder-filter-rules/${id}`, {
+    method: 'DELETE',
+  });
+};
+
+export const previewPCBuilderFilterRule = async (
+  id: string,
+  filters?: Pick<PreviewPCBuilderFilterRuleFilters, 'status' | 'in_stock'>
+): Promise<ApiResponse<Product[]>> => {
+  return apiRequest<Product[]>(`/pc-builder-filter-rules/${id}/preview${buildFilterRuleQuery(filters)}`, {
+    method: 'GET',
+  });
+};
+
+export const previewPCBuilderFilterRules = async (
+  filters: PreviewPCBuilderFilterRuleFilters
+): Promise<ApiResponse<Product[]>> => {
+  return apiRequest<Product[]>(`/pc-builder-filter-rules/preview${buildFilterRuleQuery(filters)}`, {
+    method: 'GET',
   });
 };
 
@@ -699,6 +943,30 @@ export const getPublicCategories = async (): Promise<ApiResponse<Category[]>> =>
 
 export const getPublicCategoryById = async (id: string): Promise<ApiResponse<Category>> => {
   return publicApiRequest<Category>(`/categories/${id}`, {
+    method: 'GET',
+  });
+};
+
+// Public PC Builder APIs
+export const getPublicPCBuilderOptions = async (): Promise<ApiResponse<PCBuilderOptions>> => {
+  return publicApiRequest<PCBuilderOptions>('/pc-builder/options', {
+    method: 'GET',
+  });
+};
+
+export const getPublicPCBuilderProducts = async (
+  filters: PublicPCBuilderProductFilters
+): Promise<ApiResponse<Product[]>> => {
+  const params = new URLSearchParams();
+  const categoryId = filters.selected_category_id || filters.category_id;
+  const vendorId = filters.selected_vendor_id || filters.vendor_id;
+
+  if (categoryId) params.append('selected_category_id', categoryId);
+  if (vendorId) params.append('selected_vendor_id', vendorId);
+  if (filters.result_category_id) params.append('result_category_id', filters.result_category_id);
+  if (filters.in_stock !== undefined) params.append('in_stock', String(filters.in_stock));
+
+  return publicApiRequest<Product[]>(`/pc-builder/products?${params.toString()}`, {
     method: 'GET',
   });
 };

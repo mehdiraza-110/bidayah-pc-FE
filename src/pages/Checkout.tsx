@@ -351,7 +351,7 @@ const CheckoutPage: React.FC = () => {
     >
       <Navbar />
 
-      <main className="pt-28 pb-16" ref={containerRef}>
+      <main className="pt-12 pb-16" ref={containerRef}>
         <div className="container mx-auto px-4 max-w-7xl">
           {/* Breadcrumb */}
           <motion.div
@@ -993,4 +993,3 @@ const CheckoutPage: React.FC = () => {
 };
 
 export default CheckoutPage;
-

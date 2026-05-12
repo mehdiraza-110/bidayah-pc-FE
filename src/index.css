@@ -67,6 +67,58 @@
     --sidebar-border: 220 20% 15%;
     --sidebar-ring: 180 100% 50%;
   }
+
+  .light {
+    --background: 210 35% 96%;
+    --foreground: 220 28% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 28% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 28% 10%;
+
+    --primary: 186 100% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 270 85% 48%;
+    --secondary-foreground: 0 0% 100%;
+
+    --accent: 145 70% 38%;
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 214 28% 90%;
+    --muted-foreground: 218 12% 42%;
+
+    --destructive: 0 75% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 24% 82%;
+    --input: 214 24% 88%;
+    --ring: 186 100% 38%;
+
+    --neon-cyan: 186 100% 38%;
+    --neon-purple: 270 85% 48%;
+    --neon-green: 145 70% 38%;
+    --neon-pink: 320 75% 48%;
+    --neon-orange: 25 95% 46%;
+
+    --glow-cyan: 0 0 18px hsl(186 100% 38% / 0.28), 0 0 34px hsl(186 100% 38% / 0.16);
+    --glow-purple: 0 0 18px hsl(270 85% 48% / 0.24), 0 0 34px hsl(270 85% 48% / 0.14);
+    --glow-green: 0 0 18px hsl(145 70% 38% / 0.24), 0 0 34px hsl(145 70% 38% / 0.14);
+
+    --gradient-cyber: linear-gradient(135deg, hsl(186 100% 38%), hsl(270 85% 48%));
+    --gradient-dark: linear-gradient(180deg, hsl(0 0% 100%), hsl(210 35% 96%));
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 28% 10%;
+    --sidebar-primary: 186 100% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 214 28% 92%;
+    --sidebar-accent-foreground: 220 28% 10%;
+    --sidebar-border: 214 24% 82%;
+    --sidebar-ring: 186 100% 38%;
+  }
 }
 
 @layer base {
@@ -80,6 +132,12 @@
       radial-gradient(ellipse at 20% 0%, hsl(var(--neon-purple) / 0.1) 0%, transparent 50%),
       radial-gradient(ellipse at 80% 100%, hsl(var(--neon-cyan) / 0.1) 0%, transparent 50%);
     background-attachment: fixed;
+  }
+
+  .light body {
+    background-image:
+      radial-gradient(ellipse at 20% 0%, hsl(var(--neon-cyan) / 0.12) 0%, transparent 48%),
+      radial-gradient(ellipse at 80% 100%, hsl(var(--neon-purple) / 0.1) 0%, transparent 48%);
   }
 
   ::selection {

@@ -106,7 +106,7 @@ const HeroSection: React.FC = () => {
   ];
 
   return (
-    <section ref={containerRef} className="relative overflow-hidden min-h-screen flex items-center justify-center overflow-hidden">
+    <section ref={containerRef} className="relative overflow-hidden min-h-[calc(100vh-208px)] md:min-h-[calc(100vh-188px)] flex items-center justify-center">
       {/* Background layers */}
       <div className="absolute inset-0">
         <GridBackground />
@@ -218,16 +218,16 @@ const HeroSection: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div ref={contentRef} className="relative z-10 mt-20 container mx-auto px-4 text-center">
+      <div ref={contentRef} className="relative z-10 container mx-auto px-4 text-center">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.3 }}
           className="mb-4"
         >
-          <span className="inline-block px-4 py-1 bg-primary/10 border border-primary/30 rounded-full font-mono-tech text-sm text-primary">
+          {/* <span className="inline-block px-4 py-1 bg-primary/10 border border-primary/30 rounded-full font-mono-tech text-sm text-primary">
             [ NEXT-GEN GAMING HARDWARE ]
-          </span>
+          </span> */}
         </motion.div>
 
         <motion.div
