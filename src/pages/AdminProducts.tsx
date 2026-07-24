@@ -20,6 +20,7 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
@@ -45,12 +46,59 @@ import {
 } from '@/services/api';
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type KeyFeatureFormRow = {
   key_feature_id: string;
   feature_key: string;
   value: string;
 };
+
+type ApiProductVendorFallback = ApiProduct & {
+  vendorId?: string | null;
+  vendor?: string | { id?: string | null; vendor_id?: string | null; vendor_name?: string | null; name?: string | null } | null;
+  vendors?: Array<{ id?: string | null; vendor_id?: string | null; vendor_name?: string | null; name?: string | null }>;
+};
+
+const ProductListLoader = () => (
+  <NeonCard className="p-6" glowColor="cyan" hover={false}>
+    <div className="flex items-center gap-3 border-b border-border pb-4">
+      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+      <span className="font-orbitron text-sm text-muted-foreground">Loading products...</span>
+    </div>
+    <div className="mt-4 overflow-hidden">
+      <div className="grid grid-cols-[72px_1.4fr_0.8fr_0.7fr_0.8fr_120px] gap-4 px-2 py-3 text-xs font-orbitron text-muted-foreground max-lg:hidden">
+        <span>Image</span>
+        <span>Product</span>
+        <span>Category</span>
+        <span>Price</span>
+        <span>Stock</span>
+        <span>Actions</span>
+      </div>
+      <div className="divide-y divide-border">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div
+            key={index}
+            className="grid grid-cols-[72px_1.4fr_0.8fr_0.7fr_0.8fr_120px] gap-4 px-2 py-4 max-lg:grid-cols-[72px_1fr] max-lg:items-center"
+          >
+            <Skeleton className="h-14 w-14 rounded-lg" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-4/5" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+            <Skeleton className="h-4 w-24 max-lg:hidden" />
+            <Skeleton className="h-4 w-20 max-lg:hidden" />
+            <Skeleton className="h-6 w-24 max-lg:hidden" />
+            <div className="flex gap-2 max-lg:hidden">
+              <Skeleton className="h-9 flex-1" />
+              <Skeleton className="h-9 w-9" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </NeonCard>
+);
 
 const AdminProductsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -114,6 +162,32 @@ const AdminProductsPage: React.FC = () => {
   }, []);
 
   // Helper function to convert API Product to local Product format
+  const resolveProductVendorId = (apiProduct: ApiProduct, vendors: Vendor[] = []): string | undefined => {
+    const product = apiProduct as ApiProductVendorFallback;
+    const directVendorId =
+      apiProduct.vendor_id ||
+      product.vendorId ||
+      product.vendors?.[0]?.id ||
+      product.vendors?.[0]?.vendor_id ||
+      (typeof product.vendor === 'string' ? product.vendor : product.vendor?.id || product.vendor?.vendor_id);
+
+    if (directVendorId) {
+      return directVendorId;
+    }
+
+    const vendorName =
+      apiProduct.vendor_name ||
+      product.vendors?.[0]?.vendor_name ||
+      product.vendors?.[0]?.name ||
+      (typeof product.vendor === 'object' ? product.vendor?.vendor_name || product.vendor?.name : undefined);
+
+    if (!vendorName) {
+      return undefined;
+    }
+
+    return vendors.find(vendor => vendor.vendor_name === vendorName)?.id;
+  };
+
   const mapApiProductToLocal = (apiProduct: ApiProduct): Product => {
     return {
       id: apiProduct.id,
@@ -128,7 +202,7 @@ const AdminProductsPage: React.FC = () => {
       reviews: apiProduct.reviews_count || 0,
       stock: apiProduct.stock,
       in_stock: apiProduct.in_stock,
-      vendor_id: apiProduct.vendor_id,
+      vendor_id: resolveProductVendorId(apiProduct, vendorList),
       status: apiProduct.status || 'published',
       featured: apiProduct.featured,
       new: apiProduct.new_product,
@@ -143,8 +217,9 @@ const AdminProductsPage: React.FC = () => {
       
       // Load vendors
       const vendorsResponse = await getVendors();
+      const loadedVendors = vendorsResponse.success && vendorsResponse.data ? vendorsResponse.data : [];
       if (vendorsResponse.success && vendorsResponse.data) {
-        setVendorList(vendorsResponse.data);
+        setVendorList(loadedVendors);
       } else {
         console.error('Failed to load vendors:', vendorsResponse.message);
       }
@@ -160,7 +235,10 @@ const AdminProductsPage: React.FC = () => {
       // Load all products (filtering is done client-side)
       const productsResponse = await getProducts();
       if (productsResponse.success && productsResponse.data) {
-        const mappedProducts = productsResponse.data.map(mapApiProductToLocal);
+        const mappedProducts = productsResponse.data.map(product => ({
+          ...mapApiProductToLocal(product),
+          vendor_id: resolveProductVendorId(product, loadedVendors),
+        }));
         setProductList(mappedProducts);
       } else {
         console.error('Failed to load products:', productsResponse.message);
@@ -183,6 +261,7 @@ const AdminProductsPage: React.FC = () => {
           setFormData({
             ...product,
             category_id: product.category_id || response.data.category_id,
+            vendor_id: resolveProductVendorId(response.data, vendorList),
           });
           // Set media previews
           const mediaArray = product.media || [];
@@ -211,7 +290,7 @@ const AdminProductsPage: React.FC = () => {
       };
       loadProduct();
     }
-  }, [id, isEditing, navigate]);
+  }, [id, isEditing, navigate, vendorList]);
 
   useEffect(() => {
     const loadKeyFeatures = async () => {
@@ -1146,7 +1225,9 @@ const AdminProductsPage: React.FC = () => {
                   {/* Results count */}
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
-                      Showing {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} of {filteredProducts.length} products
+                      {isLoading
+                        ? 'Loading products...'
+                        : `Showing ${filteredProducts.length === 0 ? 0 : startIndex + 1}-${Math.min(endIndex, filteredProducts.length)} of ${filteredProducts.length} products`}
                     </span>
                     <div className="flex items-center gap-2">
                       <Label className="text-xs">Items per page:</Label>
@@ -1156,6 +1237,7 @@ const AdminProductsPage: React.FC = () => {
                           setItemsPerPage(Number(e.target.value));
                           setCurrentPage(1);
                         }}
+                        disabled={isLoading}
                         className="h-8 rounded-md border border-input bg-background px-2 text-sm"
                       >
                         <option value="6">6</option>
@@ -1169,7 +1251,9 @@ const AdminProductsPage: React.FC = () => {
               </NeonCard>
 
               {/* Products Grid */}
-              {paginatedProducts.length === 0 ? (
+              {isLoading ? (
+                <ProductListLoader />
+              ) : paginatedProducts.length === 0 ? (
                 <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
                   <Package className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
                   <h3 className="font-orbitron text-xl font-bold mb-2">No Products Found</h3>

@@ -1,19 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SlidersHorizontal, X, Grid, List } from 'lucide-react';
+import { SlidersHorizontal, X, Grid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import CartDrawer from '@/components/layout/CartDrawer';
 import { ProductCard } from '@/components/products/ProductCard';
 import { Product } from '@/data/products';
-import { 
-  getPublicProducts, 
-  getPublicCategories, 
+import {
+  getPublicProducts,
+  getPublicCategories,
   getPublicVendors,
   type Product as ApiProduct,
   type Category,
-  type Vendor
+  type Vendor,
+  type Pagination
 } from '@/services/api';
 import { GSAPScrollReveal } from '@/components/effects/GSAPScrollReveal';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,9 @@ const ProductsPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const PAGE_SIZE = 12;
   
   // Helper function to convert API Product to local Product format
   const mapApiProductToLocal = (apiProduct: ApiProduct): Product => {
@@ -56,36 +60,50 @@ const ProductsPage: React.FC = () => {
   const activeCategoryId = searchParams.get('category_id') || '';
   const activeVendorId = searchParams.get('vendor_id') || '';
 
-  // Load products, categories, and vendors from public API
+  // Load categories and vendors once — they don't depend on filters/page
   useEffect(() => {
-    const loadData = async () => {
+    const loadFilters = async () => {
+      const categoriesResponse = await getPublicCategories();
+      if (categoriesResponse.success && categoriesResponse.data) {
+        setCategories(categoriesResponse.data);
+      } else {
+        console.error('Failed to load categories:', categoriesResponse.message);
+      }
+
+      const vendorsResponse = await getPublicVendors();
+      if (vendorsResponse.success && vendorsResponse.data) {
+        setVendors(vendorsResponse.data);
+      } else {
+        console.error('Failed to load vendors:', vendorsResponse.message);
+      }
+    };
+
+    loadFilters();
+  }, []);
+
+  // Reset to page 1 whenever filters or sort change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeCategoryId, activeVendorId, searchParams.toString(), sortBy]);
+
+  // Load the current page of products from the server whenever filters,
+  // sort, or the page itself change.
+  useEffect(() => {
+    const loadProducts = async () => {
       setIsLoading(true);
-      
+
       try {
-        // Load categories
-        const categoriesResponse = await getPublicCategories();
-        if (categoriesResponse.success && categoriesResponse.data) {
-          setCategories(categoriesResponse.data);
-        } else {
-          console.error('Failed to load categories:', categoriesResponse.message);
-        }
-
-        // Load vendors
-        const vendorsResponse = await getPublicVendors();
-        if (vendorsResponse.success && vendorsResponse.data) {
-          setVendors(vendorsResponse.data);
-        } else {
-          console.error('Failed to load vendors:', vendorsResponse.message);
-        }
-
-        // Load products with filters from URL params
         const filters: {
           category_id?: string;
           vendor_id?: string;
           featured?: boolean;
           in_stock?: boolean;
           search?: string;
-        } = {};
+          sort?: 'featured' | 'newest' | 'price-low' | 'price-high' | 'rating';
+          page?: number;
+          limit?: number;
+        } = { sort: sortBy as 'featured' | 'newest' | 'price-low' | 'price-high' | 'rating', page: currentPage, limit: PAGE_SIZE };
         if (activeCategoryId) filters.category_id = activeCategoryId;
         if (activeVendorId) filters.vendor_id = activeVendorId;
         if (searchParams.get('search')) filters.search = searchParams.get('search');
@@ -96,43 +114,22 @@ const ProductsPage: React.FC = () => {
         if (productsResponse.success && productsResponse.data) {
           const mappedProducts = productsResponse.data.map(mapApiProductToLocal);
           setProducts(mappedProducts);
+          setPagination(productsResponse.pagination ?? null);
         } else {
           console.error('Failed to load products:', productsResponse.message);
           toast.error('Failed to load products');
         }
       } catch (error) {
-        console.error('Error loading data:', error);
+        console.error('Error loading products:', error);
         toast.error('An error occurred while loading products');
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadData();
+    loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCategoryId, activeVendorId, searchParams.toString()]);
-
-  const filteredProducts = useMemo(() => {
-    let filtered = products;
-    
-    // Filter by category name (if using category name instead of ID)
-    if (activeCategory !== 'All' && !activeCategoryId) {
-      filtered = filtered.filter((p) => p.category === activeCategory);
-    }
-    
-    switch (sortBy) {
-      case 'price-low':
-        return [...filtered].sort((a, b) => a.price - b.price);
-      case 'price-high':
-        return [...filtered].sort((a, b) => b.price - a.price);
-      case 'rating':
-        return [...filtered].sort((a, b) => b.rating - a.rating);
-      case 'newest':
-        return [...filtered].sort((a, b) => (b.new ? 1 : 0) - (a.new ? 1 : 0));
-      default:
-        return [...filtered].sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
-    }
-  }, [products, activeCategory, activeCategoryId, sortBy]);
+  }, [activeCategoryId, activeVendorId, searchParams.toString(), sortBy, currentPage]);
 
   const handleCategoryChange = (categoryId: string) => {
     if (categoryId === 'All' || categoryId === '') {
@@ -176,7 +173,7 @@ const ProductsPage: React.FC = () => {
                 ALL <span className="text-primary">PRODUCTS</span>
               </h1>
               <p className="text-muted-foreground text-lg">
-                {filteredProducts.length} products available
+                {pagination?.total ?? products.length} products available
               </p>
             </div>
           </GSAPScrollReveal>
@@ -339,7 +336,7 @@ const ProductsPage: React.FC = () => {
                 )}
               >
                 <AnimatePresence mode="popLayout">
-                  {filteredProducts.map((product, index) => (
+                  {products.map((product, index) => (
                     <motion.div
                       key={product.id}
                       layout
@@ -358,11 +355,71 @@ const ProductsPage: React.FC = () => {
                 <div className="text-center py-16">
                   <p className="text-muted-foreground text-lg">Loading products...</p>
                 </div>
-              ) : filteredProducts.length === 0 ? (
+              ) : products.length === 0 ? (
                 <div className="text-center py-16">
                   <p className="text-muted-foreground text-lg">No products found</p>
                 </div>
               ) : null}
+
+              {!isLoading && pagination && pagination.totalPages > 1 && (
+                <div className="mt-10 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className={cn(
+                      "flex items-center gap-1 px-4 py-2 rounded-lg border border-border transition-colors font-rajdhani",
+                      currentPage === 1
+                        ? "opacity-40 cursor-not-allowed"
+                        : "hover:bg-muted text-foreground"
+                    )}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
+                      .filter(
+                        (page) =>
+                          page === 1 ||
+                          page === pagination.totalPages ||
+                          (page >= currentPage - 1 && page <= currentPage + 1)
+                      )
+                      .map((page, i, arr) => (
+                        <React.Fragment key={page}>
+                          {i > 0 && page - arr[i - 1] > 1 && (
+                            <span className="px-2 text-muted-foreground">...</span>
+                          )}
+                          <button
+                            onClick={() => setCurrentPage(page)}
+                            className={cn(
+                              "w-10 h-10 rounded-lg border transition-colors font-rajdhani",
+                              currentPage === page
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "border-border hover:bg-muted text-foreground"
+                            )}
+                          >
+                            {page}
+                          </button>
+                        </React.Fragment>
+                      ))}
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.min(pagination.totalPages, prev + 1))}
+                    disabled={currentPage === pagination.totalPages}
+                    className={cn(
+                      "flex items-center gap-1 px-4 py-2 rounded-lg border border-border transition-colors font-rajdhani",
+                      currentPage === pagination.totalPages
+                        ? "opacity-40 cursor-not-allowed"
+                        : "hover:bg-muted text-foreground"
+                    )}
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

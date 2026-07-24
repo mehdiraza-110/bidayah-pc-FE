@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
@@ -15,6 +15,7 @@ import {
   AlertCircle,
   ArrowRight,
   Settings,
+  ChevronDown,
 } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -23,7 +24,9 @@ import { NeonCard } from '@/components/ui/NeonCard';
 import {
   getPublicPCBuilderOptions,
   getPublicPCBuilderProducts,
+  getPublicPCBuilderVendorsForCategory,
   type Category,
+  type PCBuilderPriorSelection,
   type Product as ApiProduct,
   type Vendor,
 } from '@/services/api';
@@ -49,16 +52,27 @@ const PCBuilderPage: React.FC = () => {
   const navigate = useNavigate();
   const { addItem } = useCartStore();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [categoryVendors, setCategoryVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<ApiProduct[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<Record<string, ApiProduct | null>>({});
   const [selectedVendors, setSelectedVendors] = useState<Record<string, Vendor | null>>({});
   const [activeCategoryId, setActiveCategoryId] = useState('');
   const [isOptionsLoading, setIsOptionsLoading] = useState(true);
+  const [isVendorsLoading, setIsVendorsLoading] = useState(false);
   const [isProductsLoading, setIsProductsLoading] = useState(false);
   const [optionsError, setOptionsError] = useState('');
+  const [vendorsError, setVendorsError] = useState('');
   const [productsError, setProductsError] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Other categories' chosen vendors, used to narrow this category's vendor/product list
+  const getPriorSelections = useCallback(
+    (excludeCategoryId: string): PCBuilderPriorSelection[] =>
+      Object.entries(selectedVendors)
+        .filter(([categoryId, vendor]) => categoryId !== excludeCategoryId && vendor)
+        .map(([categoryId, vendor]) => ({ category_id: categoryId, vendor_id: vendor!.id })),
+    [selectedVendors]
+  );
 
   useEffect(() => {
     if (containerRef.current) {
@@ -81,7 +95,6 @@ const PCBuilderPage: React.FC = () => {
 
       if (response.success && response.data) {
         setCategories(response.data.categories || []);
-        setVendors(response.data.vendors || []);
         setActiveCategoryId(response.data.categories?.[0]?.id || '');
       } else {
         setOptionsError(response.message || 'Failed to load builder options.');
@@ -93,12 +106,34 @@ const PCBuilderPage: React.FC = () => {
     loadOptions();
   }, []);
 
-  const activeCategory = categories.find(category => category.id === activeCategoryId);
-  const selectedActiveVendor = selectedVendors[activeCategoryId];
+  useEffect(() => {
+    const loadVendors = async () => {
+      if (!activeCategoryId) {
+        setCategoryVendors([]);
+        return;
+      }
+
+      setIsVendorsLoading(true);
+      setVendorsError('');
+
+      const response = await getPublicPCBuilderVendorsForCategory(activeCategoryId, getPriorSelections(activeCategoryId));
+
+      if (response.success && response.data) {
+        setCategoryVendors(response.data);
+      } else {
+        setCategoryVendors([]);
+        setVendorsError(response.message || 'Failed to load vendors for this category.');
+      }
+
+      setIsVendorsLoading(false);
+    };
+
+    loadVendors();
+  }, [activeCategoryId, selectedVendors, getPriorSelections]);
 
   useEffect(() => {
     const loadProducts = async () => {
-      if (!activeCategoryId || !selectedVendors[activeCategoryId]) {
+      if (!activeCategoryId) {
         setProducts([]);
         setProductsError('');
         return;
@@ -110,6 +145,7 @@ const PCBuilderPage: React.FC = () => {
       const response = await getPublicPCBuilderProducts({
         selected_category_id: activeCategoryId,
         selected_vendor_id: selectedVendors[activeCategoryId]?.id,
+        prior_selections: getPriorSelections(activeCategoryId),
         in_stock: true,
       });
 
@@ -124,7 +160,20 @@ const PCBuilderPage: React.FC = () => {
     };
 
     loadProducts();
-  }, [activeCategoryId, selectedVendors]);
+  }, [activeCategoryId, selectedVendors, getPriorSelections]);
+
+  // Products can now be picked without choosing a vendor pill first; infer the
+  // vendor from the product itself so the build summary and compatibility
+  // engine still see it as a prior selection.
+  const resolveProductVendor = (product: ApiProduct): Vendor | undefined => {
+    const productWithVendors = product as ApiProduct & { vendors?: { id: string; vendor_name: string }[] };
+
+    if (product.vendor_id && product.vendor_name) {
+      return { id: product.vendor_id, vendor_name: product.vendor_name };
+    }
+
+    return productWithVendors.vendors?.[0];
+  };
 
   const handleSelectProduct = (product: ApiProduct) => {
     const categoryId = product.category_id || activeCategoryId;
@@ -133,9 +182,33 @@ const PCBuilderPage: React.FC = () => {
       ...prev,
       [categoryId]: product,
     }));
+
+    if (!selectedVendors[categoryId]) {
+      const inferredVendor = resolveProductVendor(product);
+      if (inferredVendor) {
+        setSelectedVendors(prev => ({
+          ...prev,
+          [categoryId]: inferredVendor,
+        }));
+      }
+    }
+
+    // Auto-advance the accordion to the next incomplete step
+    const currentIndex = categories.findIndex(category => category.id === categoryId);
+    const nextCategory = categories
+      .slice(currentIndex + 1)
+      .find(category => !selectedProducts[category.id]);
+
+    setTimeout(() => {
+      setActiveCategoryId(nextCategory ? nextCategory.id : '');
+    }, 350);
   };
 
-  const handleSelectVendor = (vendor: Vendor) => {
+  const toggleStep = (categoryId: string) => {
+    setActiveCategoryId(prev => (prev === categoryId ? '' : categoryId));
+  };
+
+  const handleSelectVendor = (vendor: Vendor | null) => {
     setSelectedVendors(prev => ({
       ...prev,
       [activeCategoryId]: vendor,
@@ -216,197 +289,251 @@ const PCBuilderPage: React.FC = () => {
             <p className="text-muted-foreground text-lg">
               Select components and create your perfect gaming rig
             </p>
+
+            {categories.length > 0 && (
+              <div className="mt-5 flex items-center gap-3 max-w-xl">
+                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <motion.div
+                    className="h-full bg-primary"
+                    animate={{ width: `${((categories.length - productsRemaining) / categories.length) * 100}%` }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                  />
+                </div>
+                <span className="text-sm text-muted-foreground font-mono-tech whitespace-nowrap">
+                  {categories.length - productsRemaining}/{categories.length} steps
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
-            {/* Left Column - Component Selection */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Category Tabs */}
-              <NeonCard className="p-4" glowColor="cyan" hover={false}>
-                {isOptionsLoading ? (
+            {/* Left Column - Step-by-step Component Selection */}
+            <div className="lg:col-span-2 space-y-3">
+              {isOptionsLoading ? (
+                <NeonCard className="p-6" glowColor="cyan" hover={false}>
                   <div className="text-sm text-muted-foreground">Loading builder options...</div>
-                ) : optionsError ? (
+                </NeonCard>
+              ) : optionsError ? (
+                <NeonCard className="p-6" glowColor="cyan" hover={false}>
                   <div className="text-sm text-destructive">{optionsError}</div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {categories.map((category) => {
-                      const Icon = getCategoryIcon(category.category_name);
-                      const isSelected = selectedProducts[category.id] !== null && selectedProducts[category.id] !== undefined;
-                      const isActive = activeCategoryId === category.id;
+                </NeonCard>
+              ) : (
+                categories.map((category, categoryIndex) => {
+                  const Icon = getCategoryIcon(category.category_name);
+                  const selectedProduct = selectedProducts[category.id];
+                  const selectedVendor = selectedVendors[category.id];
+                  const isComplete = !!selectedProduct;
+                  const isActive = activeCategoryId === category.id;
 
-                      return (
-                        <motion.button
-                          key={category.id}
-                          onClick={() => setActiveCategoryId(category.id)}
-                          className={cn(
-                            "flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all",
-                            isActive
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "border-border hover:border-primary/50 text-foreground/70 hover:text-foreground",
-                            isSelected && "ring-2 ring-accent/50"
-                          )}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          <Icon className="w-4 h-4" />
-                          <span className="font-rajdhani font-semibold">{category.category_name}</span>
-                          {isSelected && (
-                            <Check className="w-4 h-4 text-accent" />
-                          )}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                )}
-              </NeonCard>
-
-              {/* Vendor Selection */}
-              <NeonCard className="p-6" glowColor="green" hover={false}>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-accent/10 rounded-lg">
-                    <Settings className="w-5 h-5 text-accent" />
-                  </div>
-                  <div>
-                    <h2 className="font-orbitron text-xl font-bold">
-                      SELECT {activeCategory?.category_name || 'CATEGORY'} VENDOR
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      Choose a vendor before selecting your {activeCategory?.category_name || 'product'}.
-                    </p>
-                  </div>
-                </div>
-
-                {vendors.length === 0 ? (
-                  <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
-                    No vendors are available.
-                  </div>
-                ) : (
-                  <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {vendors.map((vendor) => {
-                      const isSelected = selectedActiveVendor?.id === vendor.id;
-
-                      return (
-                        <motion.button
-                          key={vendor.id}
-                          type="button"
-                          onClick={() => handleSelectVendor(vendor)}
-                          className={cn(
-                            "flex items-center justify-between rounded-lg border-2 p-4 text-left transition-all",
-                            isSelected
-                              ? "border-accent bg-accent/10 text-accent"
-                              : "border-border hover:border-accent/60 hover:bg-muted/30"
-                          )}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <span className="font-rajdhani font-semibold">{vendor.vendor_name}</span>
-                          {isSelected && <Check className="w-4 h-4" />}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                )}
-              </NeonCard>
-
-              {/* Component List */}
-              <NeonCard className="p-6" glowColor="purple" hover={false}>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    {React.createElement(getCategoryIcon(activeCategory?.category_name || ''), {
-                      className: 'w-5 h-5 text-primary',
-                    })}
-                  </div>
-                  <h2 className="font-orbitron text-xl font-bold">
-                    SELECT {activeCategory?.category_name || 'PRODUCT'}
-                  </h2>
-                </div>
-
-                {isProductsLoading ? (
-                  <div className="rounded-lg border border-border bg-muted/20 p-6 text-sm text-muted-foreground">
-                    Loading products...
-                  </div>
-                ) : productsError ? (
-                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-6 text-sm text-destructive">
-                    {productsError}
-                  </div>
-                ) : !selectedActiveVendor ? (
-                  <div className="rounded-lg border border-border bg-muted/20 p-6 text-sm text-muted-foreground">
-                    Select a vendor to load products for this category.
-                  </div>
-                ) : products.length === 0 ? (
-                  <div className="rounded-lg border border-border bg-muted/20 p-6 text-sm text-muted-foreground">
-                    No products found for this category and vendor selection.
-                  </div>
-                ) : (
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <AnimatePresence mode="wait">
-                      {products.map((product, index) => {
-                        const productCategoryId = product.category_id || activeCategoryId;
-                        const isSelected = selectedProducts[productCategoryId]?.id === product.id;
-                        const specs = product.specs?.map(spec => spec.spec_text) || [];
-
-                        return (
-                          <motion.div
-                            key={product.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ delay: index * 0.05 }}
-                            onClick={() => handleSelectProduct(product)}
+                  return (
+                    <NeonCard
+                      key={category.id}
+                      className={cn(
+                        "overflow-hidden transition-colors",
+                        isActive && "border-primary/60"
+                      )}
+                      hover={false}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleStep(category.id)}
+                        className="w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left"
+                      >
+                        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                          <div
                             className={cn(
-                              "relative p-4 rounded-lg border-2 cursor-pointer transition-all group",
-                              isSelected
-                                ? "border-primary bg-primary/10 shadow-[0_0_20px_hsl(var(--neon-cyan)/0.3)]"
-                                : "border-border hover:border-primary/50 hover:bg-muted/30"
+                              "w-9 h-9 shrink-0 rounded-full flex items-center justify-center font-orbitron font-bold text-sm transition-colors",
+                              isComplete
+                                ? "bg-accent text-accent-foreground"
+                                : isActive
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
                             )}
-                            whileTap={{ scale: 0.98 }}
                           >
-                            {isSelected && (
-                              <div className="absolute top-2 right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                                <Check className="w-4 h-4 text-primary-foreground" />
-                              </div>
+                            {isComplete ? <Check className="w-4 h-4" /> : categoryIndex + 1}
+                          </div>
+                          <Icon className="w-4 h-4 text-muted-foreground shrink-0 hidden sm:block" />
+                          <div className="min-w-0">
+                            <p className="font-orbitron font-bold text-sm sm:text-base uppercase tracking-wide">
+                              {category.category_name}
+                            </p>
+                            {selectedProduct ? (
+                              <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                                {selectedVendor && `${selectedVendor.vendor_name} · `}{selectedProduct.name}
+                              </p>
+                            ) : (
+                              <p className="text-xs sm:text-sm text-muted-foreground">Not selected yet</p>
                             )}
+                          </div>
+                        </div>
 
-                            <div className="flex gap-4">
-                              <img
-                                src={product.image}
-                                alt={product.name}
-                                className="w-20 h-20 object-cover rounded-lg"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-rajdhani font-semibold text-sm mb-1 truncate">
-                                  {product.name}
-                                </h3>
-                                <div className="space-y-1 mb-2">
-                                  {specs.slice(0, 2).map((spec, i) => (
-                                    <p key={i} className="text-xs text-muted-foreground">
-                                      {spec}
-                                    </p>
-                                  ))}
-                                  {specs.length === 0 && (
-                                    <p className="text-xs text-muted-foreground">
-                                      {product.category_name || activeCategory?.category_name}
-                                    </p>
-                                  )}
+                        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                          {selectedProduct && (
+                            <span className="hidden sm:block text-primary font-orbitron font-bold text-sm">
+                              AED {Number(selectedProduct.price).toLocaleString()}
+                            </span>
+                          )}
+                          <ChevronDown
+                            className={cn(
+                              "w-5 h-5 text-muted-foreground transition-transform duration-300",
+                              isActive && "rotate-180"
+                            )}
+                          />
+                        </div>
+                      </button>
+
+                      <AnimatePresence initial={false}>
+                        {isActive && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.3, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="px-4 sm:px-5 pb-5 pt-1 border-t border-border">
+                              {/* Vendor pills */}
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-4 mb-2">
+                                Filter by vendor (optional)
+                              </p>
+                              {isVendorsLoading ? (
+                                <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm text-muted-foreground">
+                                  Loading vendors...
                                 </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-primary font-orbitron text-lg font-bold">
-                                    AED {Number(product.price).toLocaleString()}
-                                  </span>
-                                  {product.in_stock !== undefined && (
-                                    <span className="text-xs text-muted-foreground">
-                                      {product.in_stock ? 'In stock' : 'Out of stock'}
-                                    </span>
-                                  )}
+                              ) : vendorsError ? (
+                                <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                                  {vendorsError}
                                 </div>
-                              </div>
+                              ) : categoryVendors.length === 0 ? (
+                                <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm text-muted-foreground">
+                                  No vendors are available.
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap gap-2 mb-5">
+                                  <motion.button
+                                    type="button"
+                                    onClick={() => handleSelectVendor(null)}
+                                    className={cn(
+                                      "px-3.5 py-1.5 rounded-full border text-xs sm:text-sm font-rajdhani font-semibold transition-all",
+                                      !selectedVendor
+                                        ? "border-accent bg-accent/10 text-accent"
+                                        : "border-border text-foreground/70 hover:border-accent/60 hover:text-foreground"
+                                    )}
+                                    whileTap={{ scale: 0.96 }}
+                                  >
+                                    All vendors
+                                  </motion.button>
+                                  {categoryVendors.map((vendor) => {
+                                    const isVendorSelected = selectedVendor?.id === vendor.id;
+
+                                    return (
+                                      <motion.button
+                                        key={vendor.id}
+                                        type="button"
+                                        onClick={() => handleSelectVendor(vendor)}
+                                        className={cn(
+                                          "px-3.5 py-1.5 rounded-full border text-xs sm:text-sm font-rajdhani font-semibold transition-all",
+                                          isVendorSelected
+                                            ? "border-accent bg-accent/10 text-accent"
+                                            : "border-border text-foreground/70 hover:border-accent/60 hover:text-foreground"
+                                        )}
+                                        whileTap={{ scale: 0.96 }}
+                                      >
+                                        {vendor.vendor_name}
+                                      </motion.button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Products for this category, optionally filtered by vendor */}
+                              {isProductsLoading ? (
+                                <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                                  Loading products...
+                                </div>
+                              ) : productsError ? (
+                                <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                                  {productsError}
+                                </div>
+                              ) : products.length === 0 ? (
+                                <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                                  No products found for this category{selectedVendor ? ' and vendor selection' : ''}.
+                                </div>
+                              ) : (
+                                <div className="grid sm:grid-cols-2 gap-3">
+                                  {products.map((product, index) => {
+                                    const productCategoryId = product.category_id || activeCategoryId;
+                                    const isSelected = selectedProducts[productCategoryId]?.id === product.id;
+                                    const specs = product.specs?.map(spec => spec.spec_text) || [];
+
+                                    return (
+                                      <motion.div
+                                        key={product.id}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: index * 0.04 }}
+                                        onClick={() => handleSelectProduct(product)}
+                                        className={cn(
+                                          "relative p-3 rounded-lg border-2 cursor-pointer transition-all group",
+                                          isSelected
+                                            ? "border-primary bg-primary/10 shadow-[0_0_20px_hsl(var(--neon-cyan)/0.3)]"
+                                            : "border-border hover:border-primary/50 hover:bg-muted/30"
+                                        )}
+                                        whileTap={{ scale: 0.98 }}
+                                      >
+                                        {isSelected && (
+                                          <div className="absolute top-2 right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                                            <Check className="w-4 h-4 text-primary-foreground" />
+                                          </div>
+                                        )}
+
+                                        <div className="flex gap-3">
+                                          <img
+                                            src={product.image}
+                                            alt={product.name}
+                                            className="w-16 h-16 object-cover rounded-lg shrink-0"
+                                          />
+                                          <div className="flex-1 min-w-0">
+                                            <h3 className="font-rajdhani font-semibold text-sm mb-1 truncate pr-6">
+                                              {product.name}
+                                            </h3>
+                                            <div className="space-y-0.5 mb-1.5">
+                                              {specs.slice(0, 2).map((spec, i) => (
+                                                <p key={i} className="text-xs text-muted-foreground truncate">
+                                                  {spec}
+                                                </p>
+                                              ))}
+                                              {specs.length === 0 && (
+                                                <p className="text-xs text-muted-foreground">
+                                                  {product.category_name || category.category_name}
+                                                </p>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-primary font-orbitron text-sm font-bold">
+                                                AED {Number(product.price).toLocaleString()}
+                                              </span>
+                                              {product.in_stock !== undefined && (
+                                                <span className="text-xs text-muted-foreground">
+                                                  {product.in_stock ? 'In stock' : 'Out of stock'}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </motion.div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </motion.div>
-                        );
-                      })}
-                    </AnimatePresence>
-                  </div>
-                )}
-              </NeonCard>
+                        )}
+                      </AnimatePresence>
+                    </NeonCard>
+                  );
+                })
+              )}
             </div>
 
             {/* Right Column - Build Summary */}

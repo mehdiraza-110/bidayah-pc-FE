@@ -16,6 +16,8 @@ import {
   Star,
   CreditCard,
   SlidersHorizontal,
+  ListOrdered,
+  Cpu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GridBackground } from '@/components/effects/GridBackground';
@@ -71,6 +73,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       name: 'Filter Rules',
       path: '/admin/filter-rules',
       icon: SlidersHorizontal,
+    },
+    {
+      name: 'Builder Categories',
+      path: '/admin/pc-builder-categories',
+      icon: ListOrdered,
+    },
+    {
+      name: 'Builder Rules',
+      path: '/admin/builder-rules',
+      icon: Cpu,
     },
     {
       name: 'Billing',

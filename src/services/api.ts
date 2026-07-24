@@ -1,11 +1,19 @@
 // API Service for making HTTP requests
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   message: string;
   data?: T;
   error?: string;
+  pagination?: Pagination | null;
 }
 
 export interface LoginRequest {
@@ -291,9 +299,40 @@ export interface PreviewPCBuilderFilterRuleFilters {
   in_stock?: boolean;
 }
 
+export interface PCBuilderCategoryConfig {
+  category_id: string;
+  category_name: string;
+  image?: string | null;
+  display_order: number;
+  is_active: boolean;
+}
+
+export interface PCBuilderCategoryConfigItem {
+  category_id: string;
+  display_order: number;
+  is_active: boolean;
+}
+
 export interface PCBuilderOptions {
   categories: Category[];
   vendors: Vendor[];
+}
+
+export interface PCBuilderCategoryVendorAssociation {
+  category_id: string;
+  vendor_id: string;
+  display_order: number;
+}
+
+export interface PCBuilderCategoryVendorConfig {
+  categories: Category[];
+  vendors: Vendor[];
+  associations: PCBuilderCategoryVendorAssociation[];
+}
+
+export interface PCBuilderPriorSelection {
+  category_id: string;
+  vendor_id: string;
 }
 
 export interface PublicPCBuilderProductFilters {
@@ -303,6 +342,7 @@ export interface PublicPCBuilderProductFilters {
   vendor_id?: string;
   result_category_id?: string;
   in_stock?: boolean;
+  prior_selections?: PCBuilderPriorSelection[];
 }
 
 // Get JWT token from localStorage
@@ -836,6 +876,39 @@ export const previewPCBuilderFilterRules = async (
   });
 };
 
+// PC Builder Category Config APIs (which categories appear as builder steps, and in what order)
+export const getPCBuilderCategoryConfig = async (): Promise<ApiResponse<PCBuilderCategoryConfig[]>> => {
+  return apiRequest<PCBuilderCategoryConfig[]>('/pc-builder-categories', {
+    method: 'GET',
+  });
+};
+
+export const updatePCBuilderCategoryConfig = async (
+  categories: PCBuilderCategoryConfigItem[]
+): Promise<ApiResponse<PCBuilderCategoryConfig[]>> => {
+  return apiRequest<PCBuilderCategoryConfig[]>('/pc-builder-categories', {
+    method: 'PUT',
+    body: JSON.stringify({ categories }),
+  });
+};
+
+// PC Builder Category Vendor APIs (which vendors are valid for a given category)
+export const getPCBuilderCategoryVendorConfig = async (): Promise<ApiResponse<PCBuilderCategoryVendorConfig>> => {
+  return apiRequest<PCBuilderCategoryVendorConfig>('/pc-builder-category-vendors', {
+    method: 'GET',
+  });
+};
+
+export const updatePCBuilderCategoryVendors = async (
+  categoryId: string,
+  vendorIds: string[]
+): Promise<ApiResponse<Vendor[]>> => {
+  return apiRequest<Vendor[]>(`/pc-builder-category-vendors/${categoryId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ vendor_ids: vendorIds }),
+  });
+};
+
 // Public API functions (no authentication required)
 // These functions use a separate helper that doesn't require auth
 
@@ -876,6 +949,7 @@ async function publicApiRequest<T>(
       success: true,
       message: data.message || 'Success',
       data: data.data,
+      pagination: data.pagination,
     };
   } catch (error) {
     return {
@@ -893,6 +967,9 @@ export const getPublicProducts = async (filters?: {
   featured?: boolean;
   in_stock?: boolean;
   search?: string;
+  sort?: 'featured' | 'newest' | 'price-low' | 'price-high' | 'rating';
+  page?: number;
+  limit?: number;
 }): Promise<ApiResponse<Product[]>> => {
   const params = new URLSearchParams();
   if (filters?.category_id) params.append('category_id', filters.category_id);
@@ -900,6 +977,9 @@ export const getPublicProducts = async (filters?: {
   if (filters?.featured !== undefined) params.append('featured', String(filters.featured));
   if (filters?.in_stock !== undefined) params.append('in_stock', String(filters.in_stock));
   if (filters?.search) params.append('search', filters.search);
+  if (filters?.sort) params.append('sort', filters.sort);
+  if (filters?.page !== undefined) params.append('page', String(filters.page));
+  if (filters?.limit !== undefined) params.append('limit', String(filters.limit));
 
   const queryString = params.toString();
   const endpoint = queryString ? `/products?${queryString}` : '/products';
@@ -965,8 +1045,26 @@ export const getPublicPCBuilderProducts = async (
   if (vendorId) params.append('selected_vendor_id', vendorId);
   if (filters.result_category_id) params.append('result_category_id', filters.result_category_id);
   if (filters.in_stock !== undefined) params.append('in_stock', String(filters.in_stock));
+  if (filters.prior_selections && filters.prior_selections.length > 0) {
+    params.append('prior_selections', JSON.stringify(filters.prior_selections));
+  }
 
   return publicApiRequest<Product[]>(`/pc-builder/products?${params.toString()}`, {
+    method: 'GET',
+  });
+};
+
+export const getPublicPCBuilderVendorsForCategory = async (
+  categoryId: string,
+  priorSelections: PCBuilderPriorSelection[] = []
+): Promise<ApiResponse<Vendor[]>> => {
+  const params = new URLSearchParams();
+  params.append('category_id', categoryId);
+  if (priorSelections.length > 0) {
+    params.append('prior_selections', JSON.stringify(priorSelections));
+  }
+
+  return publicApiRequest<Vendor[]>(`/pc-builder/vendors?${params.toString()}`, {
     method: 'GET',
   });
 };
@@ -1354,4 +1452,38 @@ export const getPublicHeroMedia = async (): Promise<ApiResponse<HeroMediaItem[]>
 export const getHeroMedia = async (): Promise<ApiResponse<HeroMediaItem[]>> => {
   // Using public endpoint for now - you can switch to admin endpoint if available
   return getPublicHeroMedia();
+};
+
+// Hero Content APIs (text/buttons/mode)
+
+export interface HeroContent {
+  id?: string;
+  mode: 'single' | 'slideshow';
+  headline_line_1: string;
+  headline_line_2: string;
+  subtext: string;
+  button_1_text: string;
+  button_1_link: string;
+  button_2_text: string;
+  button_2_link: string;
+}
+
+// Get hero content (Public)
+export const getPublicHeroContent = async (): Promise<ApiResponse<HeroContent>> => {
+  return publicApiRequest<HeroContent>('/hero-content', {
+    method: 'GET',
+  });
+};
+
+// Update hero content (Admin)
+export const updateHeroContent = async (content: HeroContent): Promise<ApiResponse<HeroContent>> => {
+  return apiRequest<HeroContent>('/customization/hero-content', {
+    method: 'PUT',
+    body: JSON.stringify(content),
+  });
+};
+
+// Get hero content (Admin - uses public endpoint, same data either way)
+export const getHeroContent = async (): Promise<ApiResponse<HeroContent>> => {
+  return getPublicHeroContent();
 };

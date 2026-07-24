@@ -128,15 +128,14 @@ const Navbar: React.FC = () => {
             {/* Logo */}
             <Link to="/" className="flex min-w-0 items-center gap-2 group">
               <motion.div
-                whileHover={{ rotate: 180, scale: 1.1 }}
-                transition={{ duration: 0.5 }}
+                whileHover={{ scale: 1.06 }}
+                transition={{ duration: 0.2 }}
                 className="relative shrink-0"
               >
                 <Cpu className="w-8 h-8 text-primary md:h-10 md:w-10" />
-                <div className="absolute inset-0 bg-primary/30 blur-xl group-hover:bg-primary/50 transition-all" />
               </motion.div>
               <span className="truncate font-orbitron text-lg font-bold text-foreground sm:text-xl md:text-2xl">
-                NEXUS<span className="text-primary">GEAR</span>
+                BIDAYAH<span className="text-primary"> PC</span>
               </span>
             </Link>
 

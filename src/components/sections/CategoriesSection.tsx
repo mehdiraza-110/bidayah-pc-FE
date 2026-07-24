@@ -1,54 +1,52 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
-import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getPublicCategories, getPublicProducts, type Category } from '@/services/api';
-import { toast } from 'sonner';
+import { motion } from 'framer-motion';
+import { ArrowRight } from 'lucide-react';
+import { getPublicCategories, getPublicProducts, type Category, type Product as ApiProduct } from '@/services/api';
+import { Product } from '@/data/products';
+import { ProductCard } from '@/components/products/ProductCard';
+import { CyberButton } from '@/components/ui/CyberButton';
 
-gsap.registerPlugin(ScrollTrigger);
-
-interface CategoryWithCount extends Category {
-  productCount?: number;
-}
+const mapApiProductToLocal = (apiProduct: ApiProduct): Product => ({
+  id: apiProduct.id,
+  name: apiProduct.name,
+  category: apiProduct.category_name || apiProduct.category_id || '',
+  price: Number(apiProduct.price),
+  originalPrice: apiProduct.original_price ? Number(apiProduct.original_price) : undefined,
+  image: apiProduct.image,
+  description: apiProduct.description,
+  specs: apiProduct.specs?.map((s) => s.spec_text) || [],
+  rating: apiProduct.rating || 0,
+  reviews: apiProduct.reviews_count || 0,
+  stock: apiProduct.stock,
+  in_stock: apiProduct.in_stock,
+  vendor_id: apiProduct.vendor_id,
+  status: apiProduct.status || 'published',
+  featured: apiProduct.featured,
+  new: apiProduct.new_product,
+  media: apiProduct.media?.map((m) => ({ url: m.url, type: m.type })) || [],
+});
 
 const CategoriesSection: React.FC = () => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const carouselRef = useRef<HTMLDivElement>(null);
-  const [categories, setCategories] = useState<CategoryWithCount[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
-  // Load categories from public API
   useEffect(() => {
     const loadCategories = async () => {
-      setIsLoading(true);
+      setIsLoadingCategories(true);
       try {
         const response = await getPublicCategories();
-        if (response.success && response.data) {
-          // Load product count for each category
-          const categoriesWithCounts = await Promise.all(
-            response.data.map(async (category) => {
-              const productsResponse = await getPublicProducts({
-                category_id: category.id,
-              });
-              return {
-                ...category,
-                productCount: productsResponse.success && productsResponse.data
-                  ? productsResponse.data.length
-                  : 0,
-              };
-            })
-          );
-          setCategories(categoriesWithCounts);
-        } else {
-          console.error('Failed to load categories:', response.message);
+        if (response.success && response.data && response.data.length > 0) {
+          setCategories(response.data);
+          setActiveCategoryId(response.data[0].id);
         }
       } catch (error) {
         console.error('Error loading categories:', error);
-        toast.error('Failed to load categories');
       } finally {
-        setIsLoading(false);
+        setIsLoadingCategories(false);
       }
     };
 
@@ -56,52 +54,38 @@ const CategoriesSection: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!containerRef.current || categories.length === 0) return;
+    if (!activeCategoryId) return;
 
-    const cards = containerRef.current.querySelectorAll('.category-card');
+    const loadProducts = async () => {
+      setIsLoadingProducts(true);
+      try {
+        const response = await getPublicProducts({ category_id: activeCategoryId });
+        if (response.success && response.data) {
+          const sorted = [...response.data].sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return dateB - dateA;
+          });
+          setProducts(sorted.slice(0, 4).map(mapApiProductToLocal));
+        } else {
+          setProducts([]);
+        }
+      } catch (error) {
+        console.error('Error loading category products:', error);
+        setProducts([]);
+      } finally {
+        setIsLoadingProducts(false);
+      }
+    };
 
-    const ctx = gsap.context(() => {
-      cards.forEach((card, i) => {
-        gsap.fromTo(card,
-          { opacity: 0, y: 30 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.8,
-            ease: 'power3.out',
-            scrollTrigger: {
-              trigger: card,
-              start: 'top 85%',
-              toggleActions: 'play none none none',
-            },
-          }
-        );
-      });
-    }, containerRef);
+    loadProducts();
+  }, [activeCategoryId]);
 
-    return () => ctx.revert();
-  }, [categories]);
-
-  const scroll = (direction: 'left' | 'right') => {
-    if (!carouselRef.current) return;
-    // Calculate scroll amount: card width (300px) + gap (24px) = 324px per card
-    // Scroll by 4 cards at a time (4 visible items)
-    const cardWidth = 300;
-    const gap = 24;
-    const scrollAmount = (cardWidth + gap) * 4;
-    carouselRef.current.scrollBy({
-      left: direction === 'left' ? -scrollAmount : scrollAmount,
-      behavior: 'smooth',
-    });
-  };
-
-  if (isLoading) {
+  if (isLoadingCategories) {
     return (
       <section className="py-24 bg-card/50">
-        <div className="container mx-auto px-4">
-          <div className="text-center">
-            <p className="text-muted-foreground">Loading categories...</p>
-          </div>
+        <div className="container mx-auto px-4 text-center">
+          <p className="text-muted-foreground">Loading categories...</p>
         </div>
       </section>
     );
@@ -111,122 +95,69 @@ const CategoriesSection: React.FC = () => {
     return null;
   }
 
+  const activeCategoryName = categories.find((c) => c.id === activeCategoryId)?.category_name || '';
+
   return (
-    <section ref={containerRef} className="py-24 bg-card/50">
-      <style>{`
-        .categories-carousel::-webkit-scrollbar {
-          display: none;
-        }
-      `}</style>
+    <section className="py-24 bg-card/50">
       <div className="container mx-auto px-4">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-10"
         >
           <h2 className="font-orbitron text-4xl md:text-5xl font-bold text-foreground mb-4">
-            SHOP BY <span className="text-primary">CATEGORY</span>
+            Shop By <span className="text-primary">Category</span>
           </h2>
           <p className="text-muted-foreground text-lg">
-            Find exactly what you need for your setup
+            Browse the latest arrivals in each category
           </p>
         </motion.div>
 
-        {/* Carousel Container */}
-        <div className="relative">
-          {/* Navigation buttons */}
-          {categories.length > 4 && (
-            <div className="absolute -top-16 right-0 flex gap-2 z-10">
-              <motion.button
-                onClick={() => scroll('left')}
-                className="w-12 h-12 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary transition-all"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </motion.button>
-              <motion.button
-                onClick={() => scroll('right')}
-                className="w-12 h-12 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary transition-all"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <ChevronRight className="w-6 h-6" />
-              </motion.button>
+        {/* Category tabs */}
+        <div className="flex justify-start gap-8 overflow-x-auto border-b border-border pb-px sm:justify-center">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              onClick={() => setActiveCategoryId(category.id)}
+              className={`shrink-0 whitespace-nowrap border-b-2 px-1 pb-3 font-rajdhani text-sm font-semibold uppercase tracking-wider transition-colors ${
+                activeCategoryId === category.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {category.category_name}
+            </button>
+          ))}
+        </div>
+
+        {/* Products for active category */}
+        <div className="mt-10">
+          {isLoadingProducts ? (
+            <div className="py-16 text-center text-muted-foreground">Loading products...</div>
+          ) : products.length > 0 ? (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {products.map((product, index) => (
+                <ProductCard key={product.id} product={product} index={index} />
+              ))}
+            </div>
+          ) : (
+            <div className="py-16 text-center text-muted-foreground">
+              No products yet in this category.
             </div>
           )}
-
-          {/* Carousel */}
-          <motion.div
-            ref={carouselRef}
-            className="categories-carousel flex gap-6 overflow-x-auto pb-4"
-            style={{ 
-              scrollbarWidth: 'none', 
-              msOverflowStyle: 'none'
-            }}
-            drag="x"
-            dragConstraints={{ left: -1000, right: 0 }}
-          >
-            {categories.map((category, index) => {
-              const colors = ['cyan', 'purple', 'green', 'cyan'];
-              const color = colors[index % colors.length];
-              
-              return (
-                <Link
-                  key={category.id}
-                  to={`/products?category_id=${category.id}`}
-                  className="flex-shrink-0 w-[300px]"
-                >
-                  <motion.div
-                    className="category-card group relative h-80 rounded-xl overflow-hidden cursor-pointer"
-                    whileHover={{ scale: 1.02 }}
-                    transition={{ type: 'spring', stiffness: 300 }}
-                  >
-                    {/* Background image */}
-                    {category.image ? (
-                      <img
-                        src={category.image}
-                        alt={category.category_name}
-                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20" />
-                    )}
-                    
-                    {/* Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
-                    
-                    {/* Border glow on hover */}
-                    <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 border-2 rounded-xl ${
-                      color === 'cyan' ? 'border-primary shadow-[inset_0_0_30px_hsl(var(--neon-cyan)/0.3)]' :
-                      color === 'purple' ? 'border-secondary shadow-[inset_0_0_30px_hsl(var(--neon-purple)/0.3)]' :
-                      'border-accent shadow-[inset_0_0_30px_hsl(var(--neon-green)/0.3)]'
-                    }`} />
-                    
-                    {/* Content */}
-                    <div className="absolute bottom-0 left-0 right-0 p-6">
-                      <h3 className="font-orbitron text-2xl font-bold text-foreground mb-1">
-                        {category.category_name}
-                      </h3>
-                      <p className="text-muted-foreground text-sm font-mono-tech">
-                        {category.productCount || 0} Products
-                      </p>
-                    </div>
-
-                    {/* Hover indicator */}
-                    <motion.div
-                      className="absolute top-4 right-4 w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      whileHover={{ scale: 1.1 }}
-                    >
-                      <span className="text-primary">→</span>
-                    </motion.div>
-                  </motion.div>
-                </Link>
-              );
-            })}
-          </motion.div>
         </div>
+
+        {activeCategoryId && (
+          <div className="mt-12 text-center">
+            <Link to={`/products?category_id=${activeCategoryId}`}>
+              <CyberButton variant="outline" size="lg" className="inline-flex items-center gap-2">
+                View All in {activeCategoryName.split(' ')[0]}
+                <ArrowRight className="w-4 h-4" />
+              </CyberButton>
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   );

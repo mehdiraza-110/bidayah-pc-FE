@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Cpu, Twitter, Instagram, Youtube, Twitch, Mail, MapPin, Phone } from 'lucide-react';
+import { Cpu, Twitter, Instagram, Youtube, Twitch, Mail, MapPin } from 'lucide-react';
 import { getPublicCategories, type Category } from '@/services/api';
 
 const Footer: React.FC = () => {
@@ -22,8 +22,8 @@ const Footer: React.FC = () => {
     loadCategories();
   }, []);
 
-  // Convert categories to footer links format
-  const productLinks = categories.map(category => ({
+  // Convert categories to footer links format (limit to top 5 to keep footer compact)
+  const productLinks = categories.slice(0, 5).map(category => ({
     name: category.category_name,
     path: `/products?category_id=${category.id}`,
   }));
@@ -72,12 +72,11 @@ const Footer: React.FC = () => {
             <Link to="/" className="flex items-center gap-2 mb-6">
               <Cpu className="w-8 h-8 text-primary" />
               <span className="font-orbitron text-xl font-bold">
-                NEXUS<span className="text-primary">GEAR</span>
+                BIDAYAH<span className="text-primary"> PC</span>
               </span>
             </Link>
             <p className="text-muted-foreground mb-6 max-w-sm">
-              Premium gaming hardware and peripherals for the ultimate competitive edge. 
-              Built by gamers, for gamers.
+              Custom gaming PCs and genuine hardware, hand-built and backed by a 3-year warranty on every system.
             </p>
             
             {/* Social Links */}
@@ -124,15 +123,11 @@ const Footer: React.FC = () => {
           <div className="flex flex-wrap gap-8 justify-center text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Mail className="w-4 h-4 text-primary" />
-              <span>support@nexusgear.com</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4 text-primary" />
-              <span>1-800-NEXUS-PC</span>
+              <span>support@bidayahpc.com</span>
             </div>
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-primary" />
-              <span>Los Angeles, CA</span>
+              <span>United Arab Emirates</span>
             </div>
           </div>
         </div>
@@ -140,14 +135,13 @@ const Footer: React.FC = () => {
         {/* Copyright */}
         <div className="mt-8 text-center">
           <p className="text-sm text-muted-foreground font-mono-tech">
-            © 2024 NEXUSGEAR. All rights reserved. | 
-            <span className="text-primary ml-1">POWER YOUR GAME</span>
+            © 2026 Bidayah PC. All rights reserved.
           </p>
         </div>
       </div>
 
       {/* Background decoration */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-gradient-radial-cyan opacity-20 blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-gradient-radial-cyan opacity-10 blur-3xl pointer-events-none" />
     </footer>
   );
 };

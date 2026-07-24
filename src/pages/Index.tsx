@@ -8,7 +8,18 @@ import HomeHighlightsSection from '@/components/sections/HomeHighlightsSection';
 import FeaturedSection from '@/components/sections/FeaturedSection';
 import FeaturesSection from '@/components/sections/FeaturesSection';
 import CategoriesSection from '@/components/sections/CategoriesSection';
+import CategoryShowcaseSection from '@/components/sections/CategoryShowcaseSection';
 import BlogFaqSection from '@/components/sections/BlogFaqSection';
+
+// One stacked section per category, mirroring the competitor's homepage layout.
+const CATEGORY_SHOWCASES = [
+  { title: 'Graphics Cards', matchTerms: ['gpu', 'graphics'] },
+  { title: 'Gaming Laptops', matchTerms: ['laptop'] },
+  { title: 'Monitors', matchTerms: ['monitor'] },
+  { title: 'Processors', matchTerms: ['cpu', 'processor'] },
+  { title: 'Keyboards', matchTerms: ['keyboard'] },
+  { title: 'Mice', matchTerms: ['mouse'] },
+];
 
 const Index: React.FC = () => {
   return (
@@ -26,6 +37,14 @@ const Index: React.FC = () => {
         <HomeHighlightsSection />
         <FeaturedSection />
         <CategoriesSection />
+        {CATEGORY_SHOWCASES.map((showcase, index) => (
+          <CategoryShowcaseSection
+            key={showcase.title}
+            title={showcase.title}
+            matchTerms={showcase.matchTerms}
+            tinted={index % 2 === 1}
+          />
+        ))}
         <FeaturesSection />
         <BlogFaqSection />
       </main>

@@ -1,8 +1,9 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { ThemeProvider } from "next-themes";
 import Index from "./pages/Index";
@@ -25,9 +26,21 @@ import AdminSettings from "./pages/AdminSettings";
 import AdminFeaturedProducts from "./pages/AdminFeaturedProducts";
 import AdminBilling from "./pages/AdminBilling";
 import AdminFilterRules from "./pages/AdminFilterRules";
+import AdminPCBuilderCategories from "./pages/AdminPCBuilderCategories";
+import AdminBuilderRules from "./pages/AdminBuilderRules";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+const ScrollToTop = () => {
+  const { pathname, search } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname, search]);
+
+  return null;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -36,6 +49,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <ScrollToTop />
           <AnimatePresence mode="wait">
             <Routes>
               <Route path="/" element={<Index />} />
@@ -59,6 +73,8 @@ const App = () => (
               <Route path="/admin/featured-products" element={<AdminFeaturedProducts />} />
               <Route path="/admin/filter-rules" element={<AdminFilterRules />} />
               <Route path="/admin/filter-rules/:id" element={<AdminFilterRules />} />
+              <Route path="/admin/pc-builder-categories" element={<AdminPCBuilderCategories />} />
+              <Route path="/admin/builder-rules" element={<AdminBuilderRules />} />
               <Route path="/admin/billing" element={<AdminBilling />} />
               <Route path="/admin/analytics" element={<AdminAnalytics />} />
               <Route path="/admin/settings" element={<AdminSettings />} />

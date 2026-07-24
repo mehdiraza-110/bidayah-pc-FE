@@ -14,9 +14,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        orbitron: ['Orbitron', 'sans-serif'],
-        rajdhani: ['Rajdhani', 'sans-serif'],
-        'mono-tech': ['Share Tech Mono', 'monospace'],
+        orbitron: ['Sora', 'sans-serif'],
+        rajdhani: ['Manrope', 'sans-serif'],
+        'mono-tech': ['Space Mono', 'monospace'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -140,7 +140,7 @@ export default {
       },
       backgroundImage: {
         'gradient-cyber': 'linear-gradient(135deg, hsl(var(--neon-cyan)), hsl(var(--neon-purple)))',
-        'gradient-rgb': 'linear-gradient(90deg, hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%), hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%))',
+        'gradient-rgb': 'linear-gradient(90deg, hsl(28 85% 42%), hsl(28 92% 60%), hsl(28 85% 42%))',
         'gradient-dark': 'linear-gradient(180deg, hsl(220 25% 8%), hsl(220 20% 4%))',
         'gradient-radial-cyan': 'radial-gradient(circle, hsl(var(--neon-cyan) / 0.2), transparent 70%)',
         'gradient-radial-purple': 'radial-gradient(circle, hsl(var(--neon-purple) / 0.2), transparent 70%)',

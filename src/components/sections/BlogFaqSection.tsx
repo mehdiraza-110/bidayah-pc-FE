@@ -69,7 +69,7 @@ const BlogFaqSection: React.FC = () => {
         >
           <div>
             <h2 className="font-orbitron text-4xl font-bold text-foreground md:text-5xl">
-              LATEST <span className="text-primary">BLOGS</span>
+              Latest <span className="text-primary">Blogs</span>
             </h2>
             <p className="mt-3 max-w-2xl text-muted-foreground">
               Short hardware guides and setup advice for smarter buying decisions.
@@ -135,7 +135,7 @@ const BlogFaqSection: React.FC = () => {
         >
           <div>
             <h2 className="font-orbitron text-4xl font-bold text-foreground md:text-5xl">
-              COMMON <span className="text-primary">QUESTIONS</span>
+              Common <span className="text-primary">Questions</span>
             </h2>
             <p className="mt-3 text-muted-foreground">
               Quick answers before you choose parts, place an order, or start a custom build.

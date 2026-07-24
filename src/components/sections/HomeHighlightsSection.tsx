@@ -4,6 +4,12 @@ import { motion } from 'framer-motion';
 import { Award, MapPin, ShieldCheck } from 'lucide-react';
 import { getPublicCategories, type Category } from '@/services/api';
 
+const stats = [
+  { value: '500+', label: 'Custom Builds Shipped' },
+  { value: '4.8★', label: 'Average Customer Rating' },
+  { value: '3-Yr', label: 'Warranty On Every Build' },
+];
+
 const infoItems = [
   {
     icon: MapPin,
@@ -62,6 +68,30 @@ const HomeHighlightsSection: React.FC = () => {
 
   return (
     <section className="bg-background">
+      <div className="border-b border-border">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-3 divide-x divide-border py-6">
+            {stats.map((stat, index) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.08 }}
+                className="text-center"
+              >
+                <div className="font-orbitron text-2xl font-bold text-foreground sm:text-3xl">
+                  {stat.value}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground sm:text-sm">
+                  {stat.label}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="border-y border-border bg-card/70">
         <div className="container mx-auto px-4">
           <div className="grid gap-5 py-6 lg:grid-cols-3">
@@ -95,7 +125,7 @@ const HomeHighlightsSection: React.FC = () => {
       </div>
 
       <div className="container mx-auto px-4 py-8">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 justify-center gap-5 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mx-auto flex max-w-6xl flex-wrap justify-center gap-x-8 gap-y-6 sm:gap-x-10 lg:gap-x-12">
           {categoryTiles.map((tile, index) => (
             <motion.div
               key={tile.label}
@@ -106,20 +136,18 @@ const HomeHighlightsSection: React.FC = () => {
             >
               <Link
                 to={tile.path}
-                className="group relative block h-40 overflow-hidden rounded-lg border border-border bg-card sm:h-44 lg:h-48"
+                className="group flex w-24 flex-col items-center gap-3 sm:w-28"
               >
-                <img
-                  src={tile.image}
-                  alt={tile.label}
-                  className="absolute inset-0 h-full w-full object-cover opacity-65 transition duration-500 group-hover:scale-110 group-hover:opacity-85"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/35 to-background/10" />
-                <div className="absolute inset-0 border border-transparent transition-colors group-hover:border-primary/70" />
-                <div className="relative z-10 flex h-full items-center justify-center">
-                  <span className="font-orbitron text-3xl font-light tracking-widest text-foreground drop-shadow-[0_0_12px_hsl(var(--background))]">
-                    {tile.label}
-                  </span>
+                <div className="h-20 w-20 overflow-hidden rounded-full border border-border bg-card transition-colors duration-300 group-hover:border-primary sm:h-24 sm:w-24">
+                  <img
+                    src={tile.image}
+                    alt={tile.label}
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-110"
+                  />
                 </div>
+                <span className="text-center text-xs font-semibold tracking-wide text-foreground transition-colors group-hover:text-primary sm:text-sm">
+                  {tile.label}
+                </span>
               </Link>
             </motion.div>
           ))}

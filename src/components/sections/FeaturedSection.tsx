@@ -56,32 +56,19 @@ const FeaturedSection: React.FC = () => {
 
   return (
     <section className="py-24 relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute top-1/2 left-0 w-96 h-96 bg-gradient-radial-purple opacity-20 blur-3xl -translate-y-1/2" />
-      <div className="absolute top-1/2 right-0 w-96 h-96 bg-gradient-radial-cyan opacity-20 blur-3xl -translate-y-1/2" />
-
       <div className="container mx-auto px-4 relative z-10">
         <GSAPScrollReveal animation="fadeUp">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-12">
             <div>
-              <motion.span 
+              <motion.span
                 className="inline-block px-3 py-1 bg-primary/10 border border-primary/30 rounded text-xs font-mono-tech text-primary mb-4"
               >
                 TOP PICKS
               </motion.span>
               <h2 className="font-orbitron text-4xl md:text-5xl font-bold text-foreground">
-                FEATURED <span className="text-primary">BUILDS</span>
+                Featured <span className="text-primary">Builds</span>
               </h2>
             </div>
-            <Link to="/products" className="mt-4 md:mt-0">
-              <motion.span 
-                className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors font-rajdhani"
-                whileHover={{ x: 5 }}
-              >
-                View All Products
-                <ArrowRight className="w-4 h-4" />
-              </motion.span>
-            </Link>
           </div>
         </GSAPScrollReveal>
 
@@ -102,8 +89,8 @@ const FeaturedSection: React.FC = () => {
         <GSAPScrollReveal animation="fadeUp" delay={0.4}>
           <div className="text-center mt-12">
             <Link to="/products">
-              <CyberButton variant="outline" size="lg" glowColor="purple" className="inline-flex items-center gap-2">
-                EXPLORE ALL PRODUCTS
+              <CyberButton variant="outline" size="lg" className="inline-flex items-center gap-2">
+                View All Products
                 <ArrowRight className="w-4 h-4" />
               </CyberButton>
             </Link>

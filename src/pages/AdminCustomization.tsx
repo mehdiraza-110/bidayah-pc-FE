@@ -11,18 +11,39 @@ import {
   Save,
   AlertCircle,
   Info,
+  GalleryHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { NeonCard } from '@/components/ui/NeonCard';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ProductMedia } from '@/data/products';
 import { cn } from '@/lib/utils';
-import { updateHeroMedia, getHeroMedia, type HeroMediaItem } from '@/services/api';
+import {
+  updateHeroMedia,
+  getHeroMedia,
+  updateHeroContent,
+  getHeroContent,
+  type HeroMediaItem,
+  type HeroContent,
+} from '@/services/api';
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB in bytes (per API guide)
 const REQUIRED_DIMENSIONS = { width: 1920, height: 1080 };
+
+const DEFAULT_HERO_CONTENT: HeroContent = {
+  mode: 'single',
+  headline_line_1: 'Gaming PCs,',
+  headline_line_2: 'Built To Win.',
+  subtext: 'Hand-built rigs with real component transparency and a 3-year warranty. Configure your own build or shop ready-to-ship systems today.',
+  button_1_text: 'Shop Gaming PCs',
+  button_1_link: '/products',
+  button_2_text: 'Start Custom Build',
+  button_2_link: '/pc-builder',
+};
 
 const AdminCustomizationPage: React.FC = () => {
   const navigate = useNavigate();
@@ -30,6 +51,9 @@ const AdminCustomizationPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [mediaFiles, setMediaFiles] = useState<(File | null)[]>(Array(7).fill(null));
   const [mediaPreviews, setMediaPreviews] = useState<(ProductMedia | null)[]>(Array(7).fill(null));
+  const [heroContent, setHeroContent] = useState<HeroContent>(DEFAULT_HERO_CONTENT);
+  const [isContentLoading, setIsContentLoading] = useState(true);
+  const [isContentSubmitting, setIsContentSubmitting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,7 +71,50 @@ const AdminCustomizationPage: React.FC = () => {
 
   useEffect(() => {
     loadHeroMedia();
+    loadHeroContent();
   }, []);
+
+  const loadHeroContent = async () => {
+    setIsContentLoading(true);
+    try {
+      const response = await getHeroContent();
+      if (response.success && response.data) {
+        setHeroContent(response.data);
+      }
+    } catch (error) {
+      console.log('Could not load existing hero content:', error);
+    } finally {
+      setIsContentLoading(false);
+    }
+  };
+
+  const handleContentFieldChange = (field: keyof HeroContent, value: string) => {
+    setHeroContent((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleContentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsContentSubmitting(true);
+
+    try {
+      const response = await updateHeroContent(heroContent);
+
+      if (response.success && response.data) {
+        toast.success('Hero content updated successfully');
+        setHeroContent(response.data);
+      } else {
+        toast.error('Failed to update hero content', {
+          description: response.message || response.error,
+        });
+      }
+    } catch (error) {
+      toast.error('Error updating hero content', {
+        description: error instanceof Error ? error.message : 'Please try again',
+      });
+    } finally {
+      setIsContentSubmitting(false);
+    }
+  };
 
   const loadHeroMedia = async () => {
     setIsLoading(true);
@@ -257,6 +324,159 @@ const AdminCustomizationPage: React.FC = () => {
           </div>
         </div>
 
+        <NeonCard className="p-8 mb-8" glowColor="purple" hover={false}>
+          {isContentLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full"
+              />
+            </div>
+          ) : (
+          <form onSubmit={handleContentSubmit} className="space-y-6">
+            <h2 className="font-orbitron text-xl font-bold">HERO CONTENT</h2>
+
+            {/* Mode toggle */}
+            <div>
+              <Label className="text-xs mb-2 block">Background Mode</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleContentFieldChange('mode', 'single')}
+                  className={cn(
+                    "flex items-center gap-3 p-4 rounded-lg border transition-colors text-left",
+                    heroContent.mode === 'single'
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:bg-muted/50"
+                  )}
+                >
+                  <ImageIcon className={cn("w-5 h-5 flex-shrink-0", heroContent.mode === 'single' ? "text-primary" : "text-muted-foreground")} />
+                  <div>
+                    <p className="font-semibold text-sm">Single Image</p>
+                    <p className="text-xs text-muted-foreground">One static background image, no slideshow controls</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleContentFieldChange('mode', 'slideshow')}
+                  className={cn(
+                    "flex items-center gap-3 p-4 rounded-lg border transition-colors text-left",
+                    heroContent.mode === 'slideshow'
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:bg-muted/50"
+                  )}
+                >
+                  <GalleryHorizontal className={cn("w-5 h-5 flex-shrink-0", heroContent.mode === 'slideshow' ? "text-primary" : "text-muted-foreground")} />
+                  <div>
+                    <p className="font-semibold text-sm">Slideshow</p>
+                    <p className="text-xs text-muted-foreground">Cycles through up to 7 slides with arrows/dots</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Headline */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Headline Line 1</Label>
+                <Input
+                  value={heroContent.headline_line_1}
+                  onChange={(e) => handleContentFieldChange('headline_line_1', e.target.value)}
+                  placeholder="Gaming PCs,"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Headline Line 2 (highlighted)</Label>
+                <Input
+                  value={heroContent.headline_line_2}
+                  onChange={(e) => handleContentFieldChange('headline_line_2', e.target.value)}
+                  placeholder="Built To Win."
+                />
+              </div>
+            </div>
+
+            {/* Subtext */}
+            <div className="space-y-2">
+              <Label className="text-xs">Subtext</Label>
+              <Textarea
+                value={heroContent.subtext}
+                onChange={(e) => handleContentFieldChange('subtext', e.target.value)}
+                rows={3}
+                required
+              />
+            </div>
+
+            {/* Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Button 1 (Primary)</p>
+                <div className="space-y-2">
+                  <Label className="text-xs">Text</Label>
+                  <Input
+                    value={heroContent.button_1_text}
+                    onChange={(e) => handleContentFieldChange('button_1_text', e.target.value)}
+                    placeholder="Shop Gaming PCs"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Link</Label>
+                  <Input
+                    value={heroContent.button_1_link}
+                    onChange={(e) => handleContentFieldChange('button_1_link', e.target.value)}
+                    placeholder="/products"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Button 2 (Outline)</p>
+                <div className="space-y-2">
+                  <Label className="text-xs">Text</Label>
+                  <Input
+                    value={heroContent.button_2_text}
+                    onChange={(e) => handleContentFieldChange('button_2_text', e.target.value)}
+                    placeholder="Start Custom Build"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Link</Label>
+                  <Input
+                    value={heroContent.button_2_link}
+                    onChange={(e) => handleContentFieldChange('button_2_link', e.target.value)}
+                    placeholder="/pc-builder"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4 border-t border-border">
+              <CyberButton type="submit" size="lg" disabled={isContentSubmitting}>
+                {isContentSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
+                    />
+                    SAVING...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Save className="w-4 h-4" />
+                    SAVE CONTENT
+                  </span>
+                )}
+              </CyberButton>
+            </div>
+          </form>
+          )}
+        </NeonCard>
+
         <NeonCard className="p-8" glowColor="cyan" hover={false}>
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
@@ -277,16 +497,25 @@ const AdminCustomizationPage: React.FC = () => {
                   <li>Dimensions: <strong className="text-foreground">{REQUIRED_DIMENSIONS.width}x{REQUIRED_DIMENSIONS.height}px</strong></li>
                   <li>Max file size: <strong className="text-foreground">{MAX_FILE_SIZE / (1024 * 1024)}MB</strong></li>
                   <li>Supported formats: Images (JPG, PNG, WebP) and Videos (MP4, WebM)</li>
-                  <li>You can upload up to <strong className="text-foreground">7 media files</strong></li>
+                  {heroContent.mode === 'slideshow' ? (
+                    <li>You can upload up to <strong className="text-foreground">7 media files</strong></li>
+                  ) : (
+                    <li>Single image mode uses <strong className="text-foreground">one background</strong> — switch to Slideshow above to add more</li>
+                  )}
                 </ul>
               </div>
             </div>
 
             {/* Hero Media Uploads */}
             <div>
-              <h2 className="font-orbitron text-xl font-bold mb-4">HERO SECTION MEDIA (7 max - Images/Videos)</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {mediaPreviews.map((preview, index) => (
+              <h2 className="font-orbitron text-xl font-bold mb-4">
+                {heroContent.mode === 'slideshow' ? 'HERO SECTION MEDIA (7 max - Images/Videos)' : 'HERO BACKGROUND IMAGE'}
+              </h2>
+              <div className={cn(
+                "grid gap-4",
+                heroContent.mode === 'slideshow' ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4" : "grid-cols-1 max-w-sm"
+              )}>
+                {mediaPreviews.slice(0, heroContent.mode === 'slideshow' ? 7 : 1).map((preview, index) => (
                   <div key={index} className="space-y-2">
                     <Label className="text-xs">
                       Media {index + 1}

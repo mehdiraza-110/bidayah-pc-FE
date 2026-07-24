@@ -30,7 +30,7 @@ const NeonCard: React.FC<NeonCardProps> = ({
   };
 
   return (
-    <motion.div 
+    <motion.div
       className={cn(
         "relative bg-card border rounded-lg overflow-hidden transition-all duration-300",
         hover && glowColor !== 'rgb' && borderStyles[glowColor],
@@ -38,15 +38,9 @@ const NeonCard: React.FC<NeonCardProps> = ({
         !hover && "border-border",
         className
       )}
-      whileHover={hover ? { y: -5, scale: 1.02 } : undefined}
+      whileHover={hover ? { y: -4 } : undefined}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
-      {/* Scanlines overlay */}
-      <div className="absolute inset-0 pointer-events-none opacity-5">
-        <div className="w-full h-full bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,0,0,0.3)_2px,rgba(0,0,0,0.3)_4px)]" />
-      </div>
-      
-      {/* Content */}
       <div className="relative z-10">
         {children}
       </div>

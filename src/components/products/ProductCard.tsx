@@ -61,13 +61,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
       className="perspective-1000"
     >
       <Link to={`/product/${product.id}`}>
-        <div className="group relative bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:border-neon-cyan/50 hover:shadow-[0_0_30px_hsl(var(--neon-cyan)/0.2)]">
-          {/* RGB Border Animation on Hover */}
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-            <div className="absolute inset-0 bg-gradient-to-r from-neon-cyan via-neon-purple to-neon-green animate-rgb-rotate blur-sm" />
-          </div>
-          
-          <div className="relative bg-card m-[1px] rounded-xl overflow-hidden">
+        <div className="group relative bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:border-primary/50 hover:shadow-[0_0_30px_hsl(var(--primary)/0.15)]">
+          <div className="relative bg-card rounded-xl overflow-hidden">
             {/* Badges */}
             <div className="absolute top-3 left-3 z-10 flex gap-2">
               {product.featured && (
@@ -80,7 +75,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
                 </motion.span>
               )}
               {product.new && (
-                <span className="px-2 py-1 bg-neon-green text-primary-foreground text-xs font-orbitron font-bold rounded">
+                <span className="px-2 py-1 bg-accent text-accent-foreground text-xs font-orbitron font-bold rounded">
                   NEW
                 </span>
               )}
@@ -106,12 +101,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
               {product.in_stock !== false && (
                 <motion.button
                   onClick={handleAddToCart}
-                  className="absolute bottom-4 left-1/2 -translate-x-1/2 px-6 py-3 bg-primary text-primary-foreground font-orbitron font-bold text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center gap-2 hover:bg-primary/90 shadow-[0_0_20px_hsl(var(--neon-cyan)/0.5)]"
+                  className="absolute bottom-3 inset-x-3 py-2.5 bg-primary text-primary-foreground font-orbitron font-bold text-xs sm:text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5 whitespace-nowrap hover:bg-primary/90 shadow-[0_0_20px_hsl(var(--neon-cyan)/0.5)]"
                   initial={{ y: 20 }}
-                  whileHover={{ scale: 1.05 }}
+                  whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <ShoppingCart className="w-4 h-4" />
+                  <ShoppingCart className="w-4 h-4 shrink-0" />
                   ADD TO CART
                 </motion.button>
               )}
