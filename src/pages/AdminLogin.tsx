@@ -5,6 +5,7 @@ import gsap from 'gsap';
 import { Lock, Mail, Shield, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { CyberButton } from '@/components/ui/CyberButton';
+import { Loader } from '@/components/ui/Loader';
 import { NeonCard } from '@/components/ui/NeonCard';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -193,14 +194,7 @@ const AdminLoginPage: React.FC = () => {
                   disabled={isLoading}
                 >
                   {isLoading ? (
-                    <span className="flex items-center gap-2">
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                        className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                      />
-                      AUTHENTICATING...
-                    </span>
+                    <Loader size="sm" label="Authenticating..." />
                   ) : (
                     <span className="flex items-center gap-2">
                       <Lock className="w-4 h-4" />

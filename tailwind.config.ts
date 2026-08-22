@@ -17,6 +17,7 @@ export default {
         orbitron: ['Sora', 'sans-serif'],
         rajdhani: ['Manrope', 'sans-serif'],
         'mono-tech': ['Space Mono', 'monospace'],
+        brand: ['"Russo One"', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

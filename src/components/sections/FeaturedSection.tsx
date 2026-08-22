@@ -6,34 +6,13 @@ import { Product } from '@/data/products';
 import { ProductCarousel } from '@/components/products/ProductCarousel';
 import { GSAPScrollReveal } from '@/components/effects/GSAPScrollReveal';
 import { CyberButton } from '@/components/ui/CyberButton';
-import { getPublicFeaturedProducts, type Product as ApiProduct } from '@/services/api';
+import { getPublicFeaturedProducts } from '@/services/api';
+import { Loader } from '@/components/ui/Loader';
+import { mapApiProductToLocal } from '@/lib/mapProduct';
 
 const FeaturedSection: React.FC = () => {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Helper function to convert API Product to local Product format
-  const mapApiProductToLocal = (apiProduct: ApiProduct): Product => {
-    return {
-      id: apiProduct.id,
-      name: apiProduct.name,
-      category: apiProduct.category_name || apiProduct.category_id || '',
-      price: Number(apiProduct.price),
-      originalPrice: apiProduct.original_price ? Number(apiProduct.original_price) : undefined,
-      image: apiProduct.image,
-      description: apiProduct.description,
-      specs: apiProduct.specs?.map(s => s.spec_text) || [],
-      rating: apiProduct.rating || 0,
-      reviews: apiProduct.reviews_count || 0,
-      stock: apiProduct.stock,
-      in_stock: apiProduct.in_stock,
-      vendor_id: apiProduct.vendor_id,
-      status: apiProduct.status || 'published',
-      featured: apiProduct.featured,
-      new: apiProduct.new_product,
-      media: apiProduct.media?.map(m => ({ url: m.url, type: m.type })) || [],
-    };
-  };
 
   useEffect(() => {
     const loadFeaturedProducts = async () => {
@@ -53,6 +32,11 @@ const FeaturedSection: React.FC = () => {
 
     loadFeaturedProducts();
   }, []);
+
+  // Nothing to show — don't render an empty section.
+  if (!isLoading && featuredProducts.length === 0) {
+    return null;
+  }
 
   return (
     <section className="py-24 relative overflow-hidden">
@@ -74,15 +58,9 @@ const FeaturedSection: React.FC = () => {
 
         <GSAPScrollReveal animation="fadeUp" delay={0.2}>
           {isLoading ? (
-            <div className="text-center py-16">
-              <p className="text-muted-foreground">Loading featured products...</p>
-            </div>
-          ) : featuredProducts.length > 0 ? (
-            <ProductCarousel products={featuredProducts} />
+            <Loader label="Loading featured products..." />
           ) : (
-            <div className="text-center py-16">
-              <p className="text-muted-foreground">No featured products available</p>
-            </div>
+            <ProductCarousel products={featuredProducts} />
           )}
         </GSAPScrollReveal>
 

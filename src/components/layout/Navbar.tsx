@@ -1,54 +1,92 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Cpu, Languages, Menu, Moon, Search, ShoppingCart, Sun, X } from 'lucide-react';
+import { ChevronDown, Cpu, Heart, Languages, Menu, Moon, Scale, Search, ShoppingCart, Sun, X } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useCartStore } from '@/store/cartStore';
+import { useWishlistStore } from '@/store/wishlistStore';
+import { useCompareStore } from '@/store/compareStore';
+import { getPublicCategories, type Category } from '@/services/api';
 import { cn } from '@/lib/utils';
 
+// Each entry either has a fixed `path`, or resolves at render time against
+// the real category list: `terms` are matched case-insensitively (exact
+// match first, so e.g. "CPU" doesn't also match "CPU COOLER") against
+// `category_name`; on a match the link carries a real `category_id` (so the
+// category hero + dynamic Specifications filters on the products page
+// actually activate), otherwise it falls back to the old `?search=` query.
+// Entries with neither `path` nor `terms` (no real category exists for them
+// yet) also fall back to `?search=`.
 const categoryLinks = [
-  { name: 'Gaming PC', path: '/products?category=Gaming+PC' },
   { name: 'Build From Scratch', path: '/pc-builder' },
-  { name: 'Laptops', path: '/products?category=Laptops' },
-  { name: 'Monitors', path: '/products?category=Monitors' },
+  { name: 'Gaming PC', fallback: 'Gaming PC' },
+  { name: 'Laptops', terms: ['laptop'], fallback: 'Laptop' },
+  { name: 'Monitors', terms: ['monitor'], fallback: 'Monitor' },
   {
     name: 'Hardware PC Parts',
-    path: '/products?category=Hardware',
+    path: '/products',
     children: [
-      { name: 'CPU', path: '/products?search=CPU' },
-      { name: 'GPU', path: '/products?search=GPU' },
-      { name: 'Motherboards', path: '/products?search=Motherboard' },
-      { name: 'RAM', path: '/products?search=RAM' },
-      { name: 'Storage', path: '/products?search=Storage' },
-      { name: 'Power Supplies', path: '/products?search=PSU' },
-      { name: 'Cooling', path: '/products?search=Cooling' },
+      { name: 'CPU', terms: ['cpu'], fallback: 'CPU' },
+      { name: 'GPU', terms: ['gpu'], fallback: 'GPU' },
+      { name: 'Motherboards', terms: ['motherboard'], fallback: 'Motherboard' },
+      { name: 'RAM', terms: ['ram'], fallback: 'RAM' },
+      { name: 'Storage', terms: ['storage'], fallback: 'Storage' },
+      { name: 'Power Supplies', terms: ['power supply'], fallback: 'PSU' },
+      { name: 'Cooling', terms: ['cpu cooler'], fallback: 'Cooling' },
     ],
   },
   {
     name: 'Gaming Accessories',
-    path: '/products?category=Gaming+Accessories',
+    path: '/products',
     children: [
-      { name: 'Keyboards', path: '/products?search=Keyboard' },
-      { name: 'Mice', path: '/products?search=Mouse' },
-      { name: 'Headsets', path: '/products?search=Headset' },
-      { name: 'Mousepads', path: '/products?search=Mousepad' },
-      { name: 'Controllers', path: '/products?search=Controller' },
-      { name: 'Streaming Gear', path: '/products?search=Streaming' },
+      { name: 'Keyboards', terms: ['keyboard'], fallback: 'Keyboard' },
+      { name: 'Mice', terms: ['mouse'], fallback: 'Mouse' },
+      { name: 'Headsets', terms: ['head phone'], fallback: 'Headset' },
+      { name: 'Mousepads', fallback: 'Mousepad' },
+      { name: 'Controllers', terms: ['steering wheel / controller'], fallback: 'Controller' },
+      { name: 'Streaming Gear', fallback: 'Streaming' },
     ],
   },
 ];
 
+// Resolves one nav entry's target: a fixed `path` wins outright; otherwise
+// try to match `terms` against a real category (exact name match first,
+// substring second), falling back to the old text-search query if nothing
+// matches.
+const resolveLinkPath = (
+  categories: Category[],
+  entry: { path?: string; terms?: string[]; fallback?: string }
+): string => {
+  if (entry.path) return entry.path;
+
+  if (entry.terms && entry.terms.length > 0) {
+    const lowerTerms = entry.terms.map((t) => t.toLowerCase());
+    const match =
+      categories.find((c) => lowerTerms.includes(c.category_name.toLowerCase())) ||
+      categories.find((c) => lowerTerms.some((t) => c.category_name.toLowerCase().includes(t)));
+    if (match) {
+      return `/products?category_id=${match.id}&category=${encodeURIComponent(match.category_name)}`;
+    }
+  }
+
+  return `/products?search=${encodeURIComponent(entry.fallback || '')}`;
+};
+
 const Navbar: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [expandedMobileCategory, setExpandedMobileCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [language, setLanguage] = useState<'en' | 'ar'>('en');
   const [isMounted, setIsMounted] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const { openCart, getTotalItems } = useCartStore();
   const totalItems = getTotalItems();
+  const wishlistCount = useWishlistStore((state) => state.items.length);
+  const compareCount = useCompareStore((state) => state.items.length);
   const isLightMode = theme === 'light';
 
   useEffect(() => {
@@ -62,6 +100,32 @@ const Navbar: React.FC = () => {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      const response = await getPublicCategories();
+      if (response.success && response.data) {
+        setCategories(response.data);
+      }
+    };
+    loadCategories();
+  }, []);
+
+  // Nav links resolved against the real category list once it's loaded —
+  // see resolveLinkPath. Before categories load, everything just falls
+  // back to its old `?search=` query, so there's no broken/empty state.
+  const resolvedCategoryLinks = useMemo(
+    () =>
+      categoryLinks.map((link) => ({
+        ...link,
+        path: resolveLinkPath(categories, link),
+        children: link.children?.map((child) => ({
+          ...child,
+          path: resolveLinkPath(categories, child),
+        })),
+      })),
+    [categories]
+  );
 
   const handleSearch = (event: React.FormEvent) => {
     event.preventDefault();
@@ -78,12 +142,28 @@ const Navbar: React.FC = () => {
   const isActive = (path: string) => {
     const [pathname, queryString] = path.split('?');
     if (location.pathname !== pathname) return false;
-    if (!queryString) return true;
-    return location.search.includes(queryString.split('=')[0]);
+
+    // A plain, query-less link (e.g. "Hardware PC Parts") only counts as
+    // active on the bare, unfiltered path — otherwise it'd stay highlighted
+    // for every filtered view of /products, including ones that have
+    // nothing to do with it.
+    if (!queryString) return location.search === '';
+
+    // Compare actual key=value pairs, not just whether the current query
+    // string happens to contain the same PARAMETER NAME — e.g. "Gaming PC"
+    // (?search=Gaming+PC) must not light up while viewing "Laptops"
+    // (?search=Laptop) just because both use a `search` param.
+    const linkParams = new URLSearchParams(queryString);
+    const currentParams = new URLSearchParams(location.search);
+    return Array.from(linkParams.entries()).every(([key, value]) => currentParams.get(key) === value);
   };
 
   const handleThemeToggle = () => {
     setTheme(isLightMode ? 'dark' : 'light');
+  };
+
+  const toggleMobileCategory = (name: string) => {
+    setExpandedMobileCategory((prev) => (prev === name ? null : name));
   };
 
   return (
@@ -132,9 +212,9 @@ const Navbar: React.FC = () => {
                 transition={{ duration: 0.2 }}
                 className="relative shrink-0"
               >
-                <Cpu className="w-8 h-8 text-primary md:h-10 md:w-10" />
+                <img src="/Bidayah-New.png" alt="" className="h-10 w-10 object-contain md:h-14 md:w-14" />
               </motion.div>
-              <span className="truncate font-orbitron text-lg font-bold text-foreground sm:text-xl md:text-2xl">
+              <span className="truncate font-brand text-xl font-bold tracking-wide text-foreground sm:text-2xl md:text-3xl">
                 BIDAYAH<span className="text-primary"> PC</span>
               </span>
             </Link>
@@ -148,7 +228,7 @@ const Navbar: React.FC = () => {
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Search products..."
-                    className="h-11 w-full border border-border bg-muted/20 pl-11 pr-4 font-rajdhani text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+                    className="h-11 w-full border border-primary bg-muted/20 pl-11 pr-4 font-rajdhani text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
                   />
                 </div>
                 <button
@@ -176,6 +256,32 @@ const Navbar: React.FC = () => {
                   <Sun className="h-4 w-4 md:h-5 md:w-5" />
                 )}
               </motion.button>
+
+              <Link
+                to="/compare"
+                className="relative inline-flex h-9 w-9 items-center justify-center text-foreground/70 transition-colors hover:text-primary md:h-10 md:w-10"
+                aria-label={`Compare (${compareCount})`}
+              >
+                <Scale className="h-4 w-4 md:h-5 md:w-5" />
+                {compareCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                    {compareCount}
+                  </span>
+                )}
+              </Link>
+
+              <Link
+                to="/wishlist"
+                className="relative inline-flex h-9 w-9 items-center justify-center text-foreground/70 transition-colors hover:text-primary md:h-10 md:w-10"
+                aria-label={`Wishlist (${wishlistCount})`}
+              >
+                <Heart className="h-4 w-4 md:h-5 md:w-5" />
+                {wishlistCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                    {wishlistCount}
+                  </span>
+                )}
+              </Link>
 
               <motion.button
                 onClick={openCart}
@@ -223,7 +329,7 @@ const Navbar: React.FC = () => {
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search products..."
-                  className="h-10 w-full border border-border bg-muted/20 pl-10 pr-3 font-rajdhani text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                  className="h-10 w-full border border-primary bg-muted/20 pl-10 pr-3 font-rajdhani text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
                 />
               </div>
               <button
@@ -238,7 +344,7 @@ const Navbar: React.FC = () => {
         </div>
 
         {/* Ticker */}
-        <div className="overflow-hidden border-t border-border/70 bg-background/90">
+        {/* <div className="overflow-hidden border-t border-border/70 bg-background/90">
           <div className="flex h-7 items-center whitespace-nowrap font-rajdhani text-xs text-foreground/80 md:h-9 md:text-sm">
             <motion.div
               className="flex gap-12"
@@ -254,7 +360,7 @@ const Navbar: React.FC = () => {
               ))}
             </motion.div>
           </div>
-        </div>
+        </div> */}
 
         {/* Mobile Menu */}
         <AnimatePresence>
@@ -268,37 +374,66 @@ const Navbar: React.FC = () => {
             >
               <div className="max-h-[calc(100svh-9rem)] overflow-y-auto px-4 py-6">
                 <div className="flex flex-col items-center gap-6">
-                  {categoryLinks.map((link, i) => (
-                    <motion.div
-                      key={link.name}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className="text-center"
-                    >
-                      <Link
-                        to={link.path}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="font-orbitron text-base font-bold uppercase text-foreground transition-colors hover:text-primary sm:text-xl"
+                  {resolvedCategoryLinks.map((link, i) => {
+                    const isExpanded = expandedMobileCategory === link.name;
+                    return (
+                      <motion.div
+                        key={link.name}
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className="text-center"
                       >
-                        {link.name}
-                      </Link>
-                      {link.children && (
-                        <div className="mt-3 flex max-w-[18rem] flex-wrap justify-center gap-2">
-                          {link.children.map((child) => (
-                            <Link
-                              key={child.name}
-                              to={child.path}
-                              onClick={() => setIsMobileMenuOpen(false)}
-                              className="rounded border border-border bg-card/70 px-2.5 py-1.5 font-rajdhani text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary"
+                        <div className="inline-flex items-center gap-1.5">
+                          <Link
+                            to={link.path}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="font-orbitron text-base font-bold uppercase text-foreground transition-colors hover:text-primary sm:text-xl"
+                          >
+                            {link.name}
+                          </Link>
+                          {link.children && (
+                            <button
+                              type="button"
+                              onClick={() => toggleMobileCategory(link.name)}
+                              aria-label={isExpanded ? `Collapse ${link.name}` : `Expand ${link.name}`}
+                              aria-expanded={isExpanded}
+                              className="p-1 text-muted-foreground transition-colors hover:text-primary"
                             >
-                              {child.name}
-                            </Link>
-                          ))}
+                              <ChevronDown className={cn('w-4 h-4 transition-transform', isExpanded && 'rotate-180')} />
+                            </button>
+                          )}
                         </div>
-                      )}
-                    </motion.div>
-                  ))}
+
+                        {link.children && (
+                          <AnimatePresence initial={false}>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                                className="overflow-hidden"
+                              >
+                                <div className="mx-auto mt-3 flex max-w-[18rem] flex-wrap justify-center gap-2">
+                                  {link.children.map((child) => (
+                                    <Link
+                                      key={child.name}
+                                      to={child.path}
+                                      onClick={() => setIsMobileMenuOpen(false)}
+                                      className="rounded border border-border bg-card/70 px-2.5 py-1.5 font-rajdhani text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary"
+                                    >
+                                      {child.name}
+                                    </Link>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        )}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>
@@ -309,13 +444,9 @@ const Navbar: React.FC = () => {
       {/* Sticky category row */}
       <div className="sticky top-0 z-50 hidden border-y border-border/70 bg-card/90 backdrop-blur-lg md:block">
         <div className="container mx-auto px-4">
-          <div className="grid h-12 grid-cols-[auto_1fr_auto] items-center gap-6">
-            <Link to="/" className="flex items-center gap-2 text-primary">
-              <Cpu className="h-7 w-7" />
-            </Link>
-
+          <div className="grid h-12 grid-cols-[1fr_auto] items-center gap-6">
             <div className="flex h-12 items-center justify-center gap-7">
-              {categoryLinks.map((link) => (
+              {resolvedCategoryLinks.map((link) => (
                 <div key={link.name} className="group relative flex h-12 items-center">
                   <Link
                     to={link.path}

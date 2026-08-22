@@ -17,11 +17,11 @@ import {
   CreditCard,
   FileText,
   Image as ImageIcon,
-  RefreshCw,
   Save,
 } from 'lucide-react';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Loader } from '@/components/ui/Loader';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -126,10 +126,7 @@ const AdminOrderDetailPage: React.FC = () => {
     return (
       <AdminLayout>
         <div className="p-6" ref={containerRef}>
-          <div className="text-center py-16">
-            <RefreshCw className="w-8 h-8 mx-auto mb-4 animate-spin text-muted-foreground" />
-            <p className="text-muted-foreground">Loading order details...</p>
-          </div>
+          <Loader label="Loading order details..." />
         </div>
       </AdminLayout>
     );
@@ -219,10 +216,7 @@ const AdminOrderDetailPage: React.FC = () => {
                       size="sm"
                     >
                       {isUpdating ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          Updating...
-                        </>
+                        <Loader size="sm" label="Updating..." />
                       ) : (
                         <>
                           <Save className="w-4 h-4 mr-2" />

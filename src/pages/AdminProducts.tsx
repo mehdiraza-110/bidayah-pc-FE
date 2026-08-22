@@ -20,15 +20,20 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
-  Loader2,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Loader } from '@/components/ui/Loader';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Product, ProductMedia } from '@/data/products';
+import { mapApiProductToLocal as mapApiProductToLocalBase } from '@/lib/mapProduct';
 import { 
   getVendors, 
   getCategories, 
@@ -37,6 +42,7 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  bulkDeleteProducts,
   getKeyFeatures,
   type Vendor, 
   type Category,
@@ -62,9 +68,8 @@ type ApiProductVendorFallback = ApiProduct & {
 
 const ProductListLoader = () => (
   <NeonCard className="p-6" glowColor="cyan" hover={false}>
-    <div className="flex items-center gap-3 border-b border-border pb-4">
-      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-      <span className="font-orbitron text-sm text-muted-foreground">Loading products...</span>
+    <div className="border-b border-border pb-4">
+      <Loader label="Loading products..." />
     </div>
     <div className="mt-4 overflow-hidden">
       <div className="grid grid-cols-[72px_1.4fr_0.8fr_0.7fr_0.8fr_120px] gap-4 px-2 py-3 text-xs font-orbitron text-muted-foreground max-lg:hidden">
@@ -121,7 +126,17 @@ const AdminProductsPage: React.FC = () => {
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
-  
+
+  // View mode + bulk selection/edit (list view only)
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
+  const [bulkCategoryId, setBulkCategoryId] = useState('');
+  const [bulkVendorId, setBulkVendorId] = useState('');
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
   const [formData, setFormData] = useState<Partial<Product & { category_id?: string }>>({
     name: '',
     category: '',
@@ -188,27 +203,8 @@ const AdminProductsPage: React.FC = () => {
     return vendors.find(vendor => vendor.vendor_name === vendorName)?.id;
   };
 
-  const mapApiProductToLocal = (apiProduct: ApiProduct): Product => {
-    return {
-      id: apiProduct.id,
-      name: apiProduct.name,
-      category: apiProduct.category_name || apiProduct.category_id || '',
-      price: Number(apiProduct.price),
-      originalPrice: apiProduct.original_price ? Number(apiProduct.original_price) : undefined,
-      image: apiProduct.image,
-      description: apiProduct.description,
-      specs: apiProduct.specs?.map(s => s.spec_text) || [],
-      rating: apiProduct.rating || 0,
-      reviews: apiProduct.reviews_count || 0,
-      stock: apiProduct.stock,
-      in_stock: apiProduct.in_stock,
-      vendor_id: resolveProductVendorId(apiProduct, vendorList),
-      status: apiProduct.status || 'published',
-      featured: apiProduct.featured,
-      new: apiProduct.new_product,
-      media: apiProduct.media?.map(m => ({ url: m.url, type: m.type })) || [],
-    };
-  };
+  const mapApiProductToLocal = (apiProduct: ApiProduct): Product =>
+    mapApiProductToLocalBase(apiProduct, { vendor_id: resolveProductVendorId(apiProduct, vendorList) });
 
   // Load products, vendors and categories from API
   useEffect(() => {
@@ -721,7 +717,13 @@ const AdminProductsPage: React.FC = () => {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
+    setSelectedIds(new Set());
   }, [searchQuery, filterCategory, filterStatus, filterVendor, filterStock]);
+
+  // Selection is scoped to the current page — clear it whenever the page changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [currentPage, viewMode]);
 
   const handleClearFilters = () => {
     setSearchQuery('');
@@ -730,6 +732,95 @@ const AdminProductsPage: React.FC = () => {
     setFilterVendor('');
     setFilterStock('');
     setCurrentPage(1);
+  };
+
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds(prev => {
+      const allSelected = paginatedProducts.length > 0 && paginatedProducts.every(p => prev.has(p.id));
+      if (allSelected) return new Set();
+      return new Set(paginatedProducts.map(p => p.id));
+    });
+  };
+
+  const toggleSelectOne = (productId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
+
+  const handleOpenBulkEdit = () => {
+    setBulkCategoryId('');
+    setBulkVendorId('');
+    setIsBulkEditOpen(true);
+  };
+
+  const handleBulkApply = async () => {
+    if (!bulkCategoryId && !bulkVendorId) {
+      toast.error('Choose a category or vendor to apply');
+      return;
+    }
+
+    setIsBulkSaving(true);
+    const ids = [...selectedIds];
+    const updatePayload: { category_id?: string; vendor_id?: string } = {};
+    if (bulkCategoryId) updatePayload.category_id = bulkCategoryId;
+    if (bulkVendorId) updatePayload.vendor_id = bulkVendorId;
+
+    const results = await Promise.all(ids.map(productId => updateProduct(productId, updatePayload)));
+
+    const updatedById = new Map<string, Product>();
+    results.forEach((res, i) => {
+      if (res.success && res.data) {
+        updatedById.set(ids[i], mapApiProductToLocal(res.data));
+      }
+    });
+    setProductList(prev => prev.map(p => updatedById.get(p.id) || p));
+
+    const successCount = updatedById.size;
+    const failedCount = ids.length - successCount;
+    if (successCount > 0) {
+      toast.success(`Updated ${successCount} product${successCount === 1 ? '' : 's'}`);
+    }
+    if (failedCount > 0) {
+      toast.error(`Failed to update ${failedCount} product${failedCount === 1 ? '' : 's'}`);
+    }
+
+    setIsBulkSaving(false);
+    setIsBulkEditOpen(false);
+    setBulkCategoryId('');
+    setBulkVendorId('');
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    setIsBulkDeleting(true);
+    const ids = [...selectedIds];
+
+    const response = await bulkDeleteProducts(ids);
+
+    if (response.success && response.data) {
+      const { deletedIds, deletedCount, notFound } = response.data;
+      setProductList(prev => prev.filter(p => !deletedIds.includes(p.id)));
+
+      if (deletedCount > 0) {
+        toast.success(`Deleted ${deletedCount} product${deletedCount === 1 ? '' : 's'}`);
+      }
+      if (notFound.length > 0) {
+        toast.error(`${notFound.length} product${notFound.length === 1 ? '' : 's'} could not be found`);
+      }
+    } else {
+      toast.error(response.message || 'Failed to delete products');
+    }
+
+    setIsBulkDeleting(false);
+    setIsBulkDeleteOpen(false);
+    setSelectedIds(new Set());
   };
 
   return (
@@ -747,10 +838,36 @@ const AdminProductsPage: React.FC = () => {
               </p>
             </div>
             {!isFormOpen && (
-              <CyberButton size="md" glowColor="cyan" onClick={handleNewProduct}>
-                <Plus className="w-4 h-4 mr-2" />
-                NEW PRODUCT
-              </CyberButton>
+              <div className="flex items-center gap-3">
+                <div className="flex rounded-lg border border-border overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('card')}
+                    aria-label="Card view"
+                    className={cn(
+                      "p-2.5 transition-colors",
+                      viewMode === 'card' ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('list')}
+                    aria-label="List view"
+                    className={cn(
+                      "p-2.5 border-l border-border transition-colors",
+                      viewMode === 'list' ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                </div>
+                <CyberButton size="md" glowColor="cyan" onClick={handleNewProduct}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  NEW PRODUCT
+                </CyberButton>
+              </div>
             )}
           </div>
         </div>
@@ -780,24 +897,22 @@ const AdminProductsPage: React.FC = () => {
                       </div>
                       <div>
                         <Label htmlFor="category_id">Product Category</Label>
-                        <select
+                        <SearchableSelect
                           id="category_id"
                           value={formData.category_id || ''}
-                          onChange={(e) => {
+                          onChange={(newValue) => {
                             setFormData(prev => ({
                               ...prev,
-                              category_id: e.target.value || undefined,
-                              category: categoryList.find(c => c.id === e.target.value)?.category_name || ''
+                              category_id: newValue || undefined,
+                              category: categoryList.find(c => c.id === newValue)?.category_name || ''
                             }));
                             setKeyFeatureRows([]);
                           }}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        >
-                          <option value="">Select a category</option>
-                          {categoryList.map(cat => (
-                            <option key={cat.id} value={cat.id}>{cat.category_name}</option>
-                          ))}
-                        </select>
+                          options={categoryList.map(cat => ({ value: cat.id, label: cat.category_name }))}
+                          placeholder="Select a category"
+                          searchPlaceholder="Search categories..."
+                          clearLabel="No category"
+                        />
                       </div>
                       <div>
                         <Label htmlFor="price">Price (AED) *</Label>
@@ -814,17 +929,15 @@ const AdminProductsPage: React.FC = () => {
                       </div>
                       <div>
                         <Label htmlFor="vendor_id">Vendor</Label>
-                        <select
+                        <SearchableSelect
                           id="vendor_id"
                           value={formData.vendor_id || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, vendor_id: e.target.value || undefined }))}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        >
-                          <option value="">Select a vendor</option>
-                          {vendorList.map(vendor => (
-                            <option key={vendor.id} value={vendor.id}>{vendor.vendor_name}</option>
-                          ))}
-                        </select>
+                          onChange={(newValue) => setFormData(prev => ({ ...prev, vendor_id: newValue || undefined }))}
+                          options={vendorList.map(vendor => ({ value: vendor.id, label: vendor.vendor_name }))}
+                          placeholder="Select a vendor"
+                          searchPlaceholder="Search vendors..."
+                          clearLabel="No vendor"
+                        />
                       </div>
                     </div>
                   </div>
@@ -998,7 +1111,7 @@ const AdminProductsPage: React.FC = () => {
 
                       {isKeyFeaturesLoading ? (
                         <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
-                          Loading key features...
+                          <Loader label="Loading key features..." size="sm" />
                         </div>
                       ) : keyFeatureRows.length === 0 ? (
                         <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
@@ -1100,14 +1213,7 @@ const AdminProductsPage: React.FC = () => {
                   <div className="flex gap-4 pt-4 border-t border-border">
                     <CyberButton type="submit" size="lg" disabled={isSubmitting}>
                       {isSubmitting ? (
-                        <span className="flex items-center gap-2">
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                            className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                          />
-                          SAVING...
-                        </span>
+                        <Loader size="sm" label="SAVING..." />
                       ) : (
                         <span className="flex items-center gap-2">
                           <Save className="w-4 h-4" />
@@ -1157,16 +1263,14 @@ const AdminProductsPage: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div>
                       <Label className="text-xs mb-2 block">Category</Label>
-                      <select
+                      <SearchableSelect
                         value={filterCategory}
-                        onChange={(e) => setFilterCategory(e.target.value)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      >
-                        <option value="">All Categories</option>
-                        {categoryList.map(cat => (
-                          <option key={cat.id} value={cat.category_name}>{cat.category_name}</option>
-                        ))}
-                      </select>
+                        onChange={setFilterCategory}
+                        options={categoryList.map(cat => ({ value: cat.category_name, label: cat.category_name }))}
+                        placeholder="All Categories"
+                        searchPlaceholder="Search categories..."
+                        clearLabel="All Categories"
+                      />
                     </div>
 
                     <div>
@@ -1184,16 +1288,14 @@ const AdminProductsPage: React.FC = () => {
 
                     <div>
                       <Label className="text-xs mb-2 block">Vendor</Label>
-                      <select
+                      <SearchableSelect
                         value={filterVendor}
-                        onChange={(e) => setFilterVendor(e.target.value)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      >
-                        <option value="">All Vendors</option>
-                        {vendorList.map(vendor => (
-                          <option key={vendor.id} value={vendor.id}>{vendor.vendor_name}</option>
-                        ))}
-                      </select>
+                        onChange={setFilterVendor}
+                        options={vendorList.map(vendor => ({ value: vendor.id, label: vendor.vendor_name }))}
+                        placeholder="All Vendors"
+                        searchPlaceholder="Search vendors..."
+                        clearLabel="All Vendors"
+                      />
                     </div>
 
                     <div>
@@ -1250,6 +1352,31 @@ const AdminProductsPage: React.FC = () => {
                 </div>
               </NeonCard>
 
+              {/* Bulk actions bar (list view only) */}
+              {viewMode === 'list' && selectedIds.size > 0 && (
+                <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-primary/40 bg-primary/5 px-4 py-3">
+                  <span className="text-sm font-semibold">
+                    {selectedIds.size} product{selectedIds.size === 1 ? '' : 's'} selected
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <CyberButton size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>
+                      Clear
+                    </CyberButton>
+                    <CyberButton size="sm" onClick={handleOpenBulkEdit}>
+                      Bulk Edit
+                    </CyberButton>
+                    <CyberButton
+                      size="sm"
+                      variant="outline"
+                      className="border-destructive text-destructive hover:bg-destructive/10"
+                      onClick={() => setIsBulkDeleteOpen(true)}
+                    >
+                      Bulk Delete
+                    </CyberButton>
+                  </div>
+                </div>
+              )}
+
               {/* Products Grid */}
               {isLoading ? (
                 <ProductListLoader />
@@ -1271,6 +1398,105 @@ const AdminProductsPage: React.FC = () => {
                 </NeonCard>
               ) : (
                 <>
+                  {viewMode === 'list' ? (
+                  <NeonCard className="p-0 overflow-hidden" glowColor="cyan" hover={false}>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-left text-xs font-orbitron text-muted-foreground">
+                            <th className="w-10 px-4 py-3">
+                              <input
+                                type="checkbox"
+                                checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.has(p.id))}
+                                onChange={toggleSelectAllOnPage}
+                                className="h-4 w-4 rounded border-input accent-primary"
+                              />
+                            </th>
+                            <th className="px-2 py-3">Image</th>
+                            <th className="px-2 py-3">Product</th>
+                            <th className="px-2 py-3">Category</th>
+                            <th className="px-2 py-3">Vendor</th>
+                            <th className="px-2 py-3">Price</th>
+                            <th className="px-2 py-3">Stock</th>
+                            <th className="px-2 py-3">Status</th>
+                            <th className="px-4 py-3 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {paginatedProducts.map((product) => (
+                            <tr
+                              key={product.id}
+                              className={cn("transition-colors", selectedIds.has(product.id) && "bg-primary/5")}
+                            >
+                              <td className="px-4 py-3">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.has(product.id)}
+                                  onChange={() => toggleSelectOne(product.id)}
+                                  className="h-4 w-4 rounded border-input accent-primary"
+                                />
+                              </td>
+                              <td className="px-2 py-3">
+                                <img
+                                  src={product.image || (product.media && product.media[0]?.url) || ''}
+                                  alt={product.name}
+                                  className="h-12 w-12 rounded-lg object-cover bg-muted"
+                                />
+                              </td>
+                              <td className="px-2 py-3 max-w-xs">
+                                <p className="font-rajdhani font-semibold truncate">{product.name}</p>
+                              </td>
+                              <td className="px-2 py-3 text-muted-foreground whitespace-nowrap">
+                                {product.category || '—'}
+                              </td>
+                              <td className="px-2 py-3 text-muted-foreground whitespace-nowrap">
+                                {vendorList.find(v => v.id === product.vendor_id)?.vendor_name || '—'}
+                              </td>
+                              <td className="px-2 py-3 font-orbitron text-primary whitespace-nowrap">
+                                AED {product.price.toLocaleString()}
+                              </td>
+                              <td className="px-2 py-3 whitespace-nowrap">
+                                {product.in_stock ? (
+                                  product.stock
+                                ) : (
+                                  <span className="text-destructive">Out</span>
+                                )}
+                              </td>
+                              <td className="px-2 py-3">
+                                <span className={cn(
+                                  "px-2 py-1 text-xs rounded whitespace-nowrap",
+                                  product.status === 'published'
+                                    ? "bg-green-500/10 text-green-500"
+                                    : "bg-muted text-muted-foreground"
+                                )}>
+                                  {product.status === 'published' ? 'Published' : 'Draft'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => handleEdit(product)}
+                                    className="p-2 rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
+                                    aria-label="Edit product"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(product.id)}
+                                    className="p-2 rounded-lg border border-destructive text-destructive hover:bg-destructive/10 transition-colors"
+                                    aria-label="Delete product"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </NeonCard>
+                  ) : (
                   <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {paginatedProducts.map((product, index) => (
                   <motion.div
@@ -1360,6 +1586,7 @@ const AdminProductsPage: React.FC = () => {
                   </motion.div>
                     ))}
                   </div>
+                  )}
 
                   {/* Pagination */}
                   {totalPages > 1 && (
@@ -1427,6 +1654,92 @@ const AdminProductsPage: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
+
+      <Dialog open={isBulkEditOpen} onOpenChange={setIsBulkEditOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Edit {selectedIds.size} Product{selectedIds.size === 1 ? '' : 's'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Leave a field on "No change" to keep it as-is for the selected products.
+            </p>
+            <div>
+              <Label htmlFor="bulk-category">Category</Label>
+              <SearchableSelect
+                id="bulk-category"
+                value={bulkCategoryId}
+                onChange={setBulkCategoryId}
+                options={categoryList.map(cat => ({ value: cat.id, label: cat.category_name }))}
+                placeholder="No change"
+                searchPlaceholder="Search categories..."
+                clearLabel="No change"
+              />
+            </div>
+            <div>
+              <Label htmlFor="bulk-vendor">Vendor</Label>
+              <SearchableSelect
+                id="bulk-vendor"
+                value={bulkVendorId}
+                onChange={setBulkVendorId}
+                options={vendorList.map(vendor => ({ value: vendor.id, label: vendor.vendor_name }))}
+                placeholder="No change"
+                searchPlaceholder="Search vendors..."
+                clearLabel="No change"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <CyberButton
+              type="button"
+              variant="outline"
+              onClick={() => setIsBulkEditOpen(false)}
+              disabled={isBulkSaving}
+            >
+              Cancel
+            </CyberButton>
+            <CyberButton
+              type="button"
+              onClick={handleBulkApply}
+              disabled={isBulkSaving || (!bulkCategoryId && !bulkVendorId)}
+            >
+              {isBulkSaving ? <Loader size="sm" label="Applying..." /> : `Apply to ${selectedIds.size}`}
+            </CyberButton>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isBulkDeleteOpen} onOpenChange={setIsBulkDeleteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete {selectedIds.size} Product{selectedIds.size === 1 ? '' : 's'}?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete the selected product{selectedIds.size === 1 ? '' : 's'}, including their
+              images. This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <CyberButton
+              type="button"
+              variant="outline"
+              onClick={() => setIsBulkDeleteOpen(false)}
+              disabled={isBulkDeleting}
+            >
+              Cancel
+            </CyberButton>
+            <CyberButton
+              type="button"
+              className="border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleBulkDeleteConfirm}
+              disabled={isBulkDeleting}
+            >
+              {isBulkDeleting ? <Loader size="sm" label="Deleting..." /> : `Delete ${selectedIds.size}`}
+            </CyberButton>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 };

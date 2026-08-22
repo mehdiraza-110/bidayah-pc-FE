@@ -1,9 +1,15 @@
-import React, { useRef } from 'react';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { ShoppingCart, Star, Zap } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Check, Heart, Scale, Search, ShoppingCart } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Product } from '@/data/products';
 import { useCartStore } from '@/store/cartStore';
+import { useWishlistStore } from '@/store/wishlistStore';
+import { useCompareStore, MAX_COMPARE_ITEMS } from '@/store/compareStore';
+import { ProductQuickView } from '@/components/products/ProductQuickView';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { productUrl } from '@/lib/slug';
 import { cn } from '@/lib/utils';
 
 interface ProductCardProps {
@@ -11,36 +17,40 @@ interface ProductCardProps {
   index?: number;
 }
 
+// How often the image swaps while a card is hovered.
+const HOVER_CYCLE_MS = 700;
+
 const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
-  const cardRef = useRef<HTMLDivElement>(null);
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
   const { addItem, openCart } = useCartStore();
-  
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  
-  const mouseXSpring = useSpring(x);
-  const mouseYSpring = useSpring(y);
-  
-  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ['7.5deg', '-7.5deg']);
-  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ['-7.5deg', '7.5deg']);
+  const isWishlisted = useWishlistStore((state) => state.isWishlisted(product.id));
+  const toggleWishlist = useWishlistStore((state) => state.toggleItem);
+  const isCompared = useCompareStore((state) => state.isCompared(product.id));
+  const toggleCompare = useCompareStore((state) => state.toggleItem);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const width = rect.width;
-    const height = rect.height;
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    const xPct = mouseX / width - 0.5;
-    const yPct = mouseY / height - 0.5;
-    x.set(xPct);
-    y.set(yPct);
-  };
+  // Main image first, then the rest of the gallery — de-duped in case the main
+  // image is also listed in `media`.
+  const galleryImages = useMemo(() => {
+    const mediaImages = (product.media || [])
+      .filter((item) => item.type === 'image')
+      .map((item) => item.url);
+    return Array.from(new Set([product.image, ...mediaImages].filter(Boolean)));
+  }, [product.image, product.media]);
 
-  const handleMouseLeave = () => {
-    x.set(0);
-    y.set(0);
-  };
+  useEffect(() => {
+    if (!isHovered || galleryImages.length <= 1) {
+      setImageIndex(0);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setImageIndex((prev) => (prev + 1) % galleryImages.length);
+    }, HOVER_CYCLE_MS);
+
+    return () => window.clearInterval(timer);
+  }, [isHovered, galleryImages.length]);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -49,132 +59,155 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
     openCart();
   };
 
+  const handleToggleWishlist = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const added = toggleWishlist(product);
+    toast.success(added ? 'Added to wishlist' : 'Removed from wishlist');
+  };
+
+  const handleToggleCompare = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const result = toggleCompare(product);
+    if (result === 'added') toast.success('Added to compare');
+    else if (result === 'removed') toast.success('Removed from compare');
+    else toast.error(`You can compare up to ${MAX_COMPARE_ITEMS} products at a time`);
+  };
+
+  const handleQuickView = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsQuickViewOpen(true);
+  };
+
+  const actionButtons = [
+    { icon: ShoppingCart, label: 'Add to cart', onClick: handleAddToCart, active: false },
+    { icon: Search, label: 'Quick view', onClick: handleQuickView, active: false },
+    { icon: Scale, label: 'Compare', onClick: handleToggleCompare, active: isCompared },
+    { icon: Heart, label: 'Wishlist', onClick: handleToggleWishlist, active: isWishlisted },
+  ];
+
   return (
     <motion.div
-      ref={cardRef}
       initial={{ opacity: 0, y: 50 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1, duration: 0.5 }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      style={{ rotateX, rotateY, transformStyle: 'preserve-3d' }}
-      className="perspective-1000"
     >
-      <Link to={`/product/${product.id}`}>
-        <div className="group relative bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:border-primary/50 hover:shadow-[0_0_30px_hsl(var(--primary)/0.15)]">
+      <Link to={productUrl(product)}>
+        <div
+          className="group relative bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:border-primary/50 hover:shadow-[0_0_30px_hsl(var(--primary)/0.15)]"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
           <div className="relative bg-card rounded-xl overflow-hidden">
             {/* Badges */}
-            <div className="absolute top-3 left-3 z-10 flex gap-2">
+            <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 flex gap-1.5 sm:gap-2">
               {product.featured && (
                 <motion.span
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  className="px-2 py-1 bg-primary text-primary-foreground text-xs font-orbitron font-bold rounded"
+                  className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-primary text-primary-foreground text-[10px] sm:text-xs font-orbitron font-bold rounded"
                 >
                   FEATURED
                 </motion.span>
               )}
               {product.new && (
-                <span className="px-2 py-1 bg-accent text-accent-foreground text-xs font-orbitron font-bold rounded">
+                <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-accent text-accent-foreground text-[10px] sm:text-xs font-orbitron font-bold rounded">
                   NEW
                 </span>
               )}
               {product.originalPrice && (
-                <span className="px-2 py-1 bg-destructive text-destructive-foreground text-xs font-orbitron font-bold rounded">
+                <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-destructive text-destructive-foreground text-[10px] sm:text-xs font-orbitron font-bold rounded">
                   SALE
                 </span>
               )}
             </div>
 
-            {/* Image */}
-            <div className="relative aspect-square overflow-hidden bg-muted">
+            {/* Hover action rail */}
+            <div className="absolute top-3 right-3 z-10 flex flex-col gap-2 opacity-0 translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+              {actionButtons.map(({ icon: Icon, label, onClick, active }) => (
+                <Tooltip key={label} delayDuration={150}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={onClick}
+                      aria-label={label}
+                      className={cn(
+                        'flex h-9 w-9 items-center justify-center rounded-full bg-black text-white shadow-lg transition-colors hover:bg-primary hover:text-primary-foreground',
+                        active && 'bg-primary text-primary-foreground'
+                      )}
+                    >
+                      <Icon className={cn('w-4 h-4', active && label === 'Wishlist' && 'fill-current')} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" className="bg-black/90 text-white border-none">
+                    {label}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+
+            {/* Image — cycles through the gallery while hovered */}
+            <div className="relative aspect-square overflow-hidden bg-white p-2.5 sm:p-4">
               <motion.img
-                src={product.image}
+                key={galleryImages[imageIndex]}
+                src={galleryImages[imageIndex] || product.image}
                 alt={product.name}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.25 }}
+                className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
               />
-              
-              {/* Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              
-              {/* Quick add button - only show if in stock */}
-              {product.in_stock !== false && (
-                <motion.button
-                  onClick={handleAddToCart}
-                  className="absolute bottom-3 inset-x-3 py-2.5 bg-primary text-primary-foreground font-orbitron font-bold text-xs sm:text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5 whitespace-nowrap hover:bg-primary/90 shadow-[0_0_20px_hsl(var(--neon-cyan)/0.5)]"
-                  initial={{ y: 20 }}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <ShoppingCart className="w-4 h-4 shrink-0" />
-                  ADD TO CART
-                </motion.button>
-              )}
             </div>
 
             {/* Content */}
-            <div className="p-5">
-              <span className="text-xs text-muted-foreground font-mono-tech uppercase tracking-wider">
-                {product.category}
-              </span>
-              
-              <h3 className="font-orbitron font-bold text-lg mt-1 text-foreground group-hover:text-primary transition-colors line-clamp-1">
+            <div className="p-3 sm:p-5">
+              <h3 className="font-orbitron font-bold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem]">
                 {product.name}
               </h3>
-              
-              {/* Rating */}
-              <div className="flex items-center gap-1 mt-2">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star
-                    key={i}
-                    className={cn(
-                      "w-3 h-3",
-                      i < Math.floor(product.rating)
-                        ? "text-neon-orange fill-neon-orange"
-                        : "text-muted-foreground"
-                    )}
-                  />
-                ))}
-                <span className="text-xs text-muted-foreground ml-1">
-                  ({product.reviews})
+
+              {product.vendorName && (
+                <span className="text-xs text-muted-foreground mt-1 block">
+                  {product.vendorName}
                 </span>
-              </div>
+              )}
+
+              {/* Stock status */}
+              {product.in_stock !== false && (
+                <div className="mt-2">
+                  <span className="flex items-center gap-1 text-xs font-semibold text-primary">
+                    <Check className="w-3.5 h-3.5" />
+                    In Stock
+                  </span>
+                </div>
+              )}
 
               {/* Price or Out of Stock */}
-              <div className="flex items-center gap-2 mt-3">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-2 sm:mt-3">
                 {product.in_stock === false ? (
-                  <span className="font-orbitron text-lg font-bold text-destructive">
+                  <span className="font-orbitron text-sm sm:text-lg font-bold text-destructive">
                     Out of Stock
                   </span>
                 ) : (
                   <>
-                    <span className="font-orbitron text-xl font-bold text-primary">
+                    <span className="font-orbitron text-sm sm:text-xl font-bold text-primary">
                       AED {product.price.toLocaleString()}
                     </span>
                     {product.originalPrice && (
-                      <span className="text-sm text-muted-foreground line-through">
+                      <span className="text-xs sm:text-sm text-muted-foreground line-through">
                         AED {product.originalPrice.toLocaleString()}
                       </span>
                     )}
                   </>
                 )}
               </div>
-
-              {/* Specs preview */}
-              <div className="flex flex-wrap gap-1 mt-3">
-                {product.specs.slice(0, 2).map((spec, i) => (
-                  <span
-                    key={i}
-                    className="px-2 py-0.5 bg-muted text-muted-foreground text-xs rounded"
-                  >
-                    {spec}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
         </div>
       </Link>
+
+      <ProductQuickView product={product} open={isQuickViewOpen} onOpenChange={setIsQuickViewOpen} />
     </motion.div>
   );
 };

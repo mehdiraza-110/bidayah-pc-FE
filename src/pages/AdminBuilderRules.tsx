@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { CyberButton } from '@/components/ui/CyberButton';
+import { Loader } from '@/components/ui/Loader';
 import { NeonCard } from '@/components/ui/NeonCard';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -331,12 +332,7 @@ const AdminBuilderRulesPage: React.FC = () => {
 
         {isLoading ? (
           <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-              className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto"
-            />
-            <p className="text-muted-foreground mt-4">Loading builder rules...</p>
+            <Loader label="Loading builder rules..." />
           </NeonCard>
         ) : builderCategories.length === 0 ? (
           <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
@@ -574,11 +570,7 @@ const AdminBuilderRulesPage: React.FC = () => {
 
                     <CyberButton type="submit" size="md" glowColor="cyan" disabled={isSubmittingRule} className="ml-auto">
                       {isSubmittingRule ? (
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                          className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                        />
+                        <Loader size="sm" />
                       ) : (
                         <Plus className="w-4 h-4" />
                       )}

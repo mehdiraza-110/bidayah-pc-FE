@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Cpu, Twitter, Instagram, Youtube, Twitch, Mail, MapPin } from 'lucide-react';
+import { Mail, MapPin } from 'lucide-react';
 import { getPublicCategories, type Category } from '@/services/api';
+import { TwitterIcon, InstagramIcon, YouTubeIcon, TwitchIcon } from '@/components/icons/SocialIcons';
 
 const Footer: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -37,6 +38,7 @@ const Footer: React.FC = () => {
       { name: 'Returns', path: '#' },
     ],
     company: [
+      { name: 'Blog', path: '/blog' },
       { name: 'About Us', path: '#' },
       { name: 'Careers', path: '#' },
       { name: 'Press', path: '#' },
@@ -48,10 +50,10 @@ const Footer: React.FC = () => {
   };
 
   const socialLinks = [
-    { icon: Twitter, href: '#', label: 'Twitter' },
-    { icon: Instagram, href: '#', label: 'Instagram' },
-    { icon: Youtube, href: '#', label: 'YouTube' },
-    { icon: Twitch, href: '#', label: 'Twitch' },
+    { icon: TwitterIcon, href: '#', label: 'Twitter' },
+    { icon: InstagramIcon, href: '#', label: 'Instagram' },
+    { icon: YouTubeIcon, href: '#', label: 'YouTube' },
+    { icon: TwitchIcon, href: '#', label: 'Twitch' },
   ];
 
   return (
@@ -66,12 +68,12 @@ const Footer: React.FC = () => {
       </div>
 
       <div className="container mx-auto px-4 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-10 lg:gap-12">
           {/* Brand */}
-          <div className="lg:col-span-2">
+          <div className="col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-6">
-              <Cpu className="w-8 h-8 text-primary" />
-              <span className="font-orbitron text-xl font-bold">
+              <img src="/Bidayah-New.png" alt="Bidayah PC" className="h-14 w-14 object-contain" />
+              <span className="font-brand text-2xl font-bold tracking-wide">
                 BIDAYAH<span className="text-primary"> PC</span>
               </span>
             </Link>
@@ -85,7 +87,8 @@ const Footer: React.FC = () => {
                 <motion.a
                   key={social.label}
                   href={social.href}
-                  className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all border border-transparent hover:border-primary/30"
+                  aria-label={social.label}
+                  className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center transition-all border border-transparent hover:border-primary/30 hover:bg-muted/70"
                   whileHover={{ scale: 1.1, y: -2 }}
                   whileTap={{ scale: 0.95 }}
                 >

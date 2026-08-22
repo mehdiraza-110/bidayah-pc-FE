@@ -1,31 +1,47 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
-import { 
-  ChevronLeft, 
-  Star, 
-  ShoppingCart, 
-  Heart, 
-  Share2, 
-  Check, 
-  Truck, 
-  Shield, 
-  RotateCcw,
+import {
+  ChevronLeft,
+  ChevronRight,
+  ShoppingCart,
+  Heart,
+  Share2,
+  Check,
   Minus,
-  Plus
+  Plus,
+  Eye,
+  Scale,
+  Truck,
+  MapPin,
 } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import CartDrawer from '@/components/layout/CartDrawer';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { Product } from '@/data/products';
-import { getPublicProductById, getPublicProducts, type Product as ApiProduct } from '@/services/api';
+import {
+  getPublicProductById,
+  getPublicProductBySlug,
+  getPublicProducts,
+  getPublicSiteSettings,
+  getPublicStoreLocations,
+  type StoreLocation,
+} from '@/services/api';
+import { mapApiProductToLocal } from '@/lib/mapProduct';
+import { isUuid, productUrl } from '@/lib/slug';
 import { useCartStore } from '@/store/cartStore';
+import { useWishlistStore } from '@/store/wishlistStore';
+import { useCompareStore } from '@/store/compareStore';
 import { ProductCarousel } from '@/components/products/ProductCarousel';
+import { Loader } from '@/components/ui/Loader';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+const LOW_STOCK_THRESHOLD = 5;
 
 const sanitizeRichText = (html?: string) => {
   if (!html || typeof window === 'undefined') return '';
@@ -52,53 +68,54 @@ const sanitizeRichText = (html?: string) => {
 };
 
 const ProductDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, slug } = useParams<{ id: string; slug?: string }>();
+  const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [isImageZoomed, setIsImageZoomed] = useState(false);
+  const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
   const [quantity, setQuantity] = useState(1);
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState<string | null>(null);
+  const [pickupLocations, setPickupLocations] = useState<StoreLocation[]>([]);
   const { addItem, openCart } = useCartStore();
+  const isWishlisted = useWishlistStore((state) => (product ? state.isWishlisted(product.id) : false));
+  const toggleWishlist = useWishlistStore((state) => state.toggleItem);
+  const isCompared = useCompareStore((state) => (product ? state.isCompared(product.id) : false));
+  const toggleCompare = useCompareStore((state) => state.toggleItem);
   const imageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Helper function to convert API Product to local Product format
-  const mapApiProductToLocal = (apiProduct: ApiProduct): Product => {
-    return {
-      id: apiProduct.id,
-      name: apiProduct.name,
-      category: apiProduct.category_name || apiProduct.category_id || '',
-      price: Number(apiProduct.price),
-      originalPrice: apiProduct.original_price ? Number(apiProduct.original_price) : undefined,
-      image: apiProduct.image,
-      description: apiProduct.description,
-      specs: apiProduct.specs?.map(s => s.spec_text) || [],
-      rating: apiProduct.rating || 0,
-      reviews: apiProduct.reviews_count || 0,
-      stock: apiProduct.stock,
-      in_stock: apiProduct.in_stock,
-      vendor_id: apiProduct.vendor_id,
-      status: apiProduct.status || 'published',
-      featured: apiProduct.featured,
-      new: apiProduct.new_product,
-      media: apiProduct.media?.map(m => ({ url: m.url, type: m.type })) || [],
-    };
-  };
-
-  // Load product and related products
+  // Load product and related products. Two URL shapes land here:
+  //  - legacy: /product/<uuid>[/<any-slug>]      — `id` is the real product id
+  //  - current: /product/<category-slug>/<slug>  — `slug` is the real lookup key,
+  //    `id` here is just the decorative (unused) category segment
   useEffect(() => {
     const loadProduct = async () => {
       if (!id) return;
 
       setIsLoading(true);
       try {
-        // Load the product by ID
-        const response = await getPublicProductById(id);
+        const legacyById = isUuid(id);
+        const response = legacyById
+          ? await getPublicProductById(id)
+          : await getPublicProductBySlug(slug || id);
+
         if (response.success && response.data) {
           const mappedProduct = mapApiProductToLocal(response.data);
           setProduct(mappedProduct);
+          setCategoryId(response.data.category_id || null);
           setSelectedImage(0); // Reset to first image
+          setQuantity(1);
+
+          // Keep the URL in sync with the canonical, id-free /product/<category>/<slug>
+          // form — covers old id-based links, a renamed product, or a category rename.
+          const canonicalUrl = productUrl(mappedProduct);
+          if (window.location.pathname !== canonicalUrl) {
+            navigate(canonicalUrl, { replace: true });
+          }
 
           // Load related products from the same category
           if (response.data.category_id) {
@@ -107,7 +124,7 @@ const ProductDetailPage: React.FC = () => {
             });
             if (relatedResponse.success && relatedResponse.data) {
               const mappedRelated = relatedResponse.data
-                .filter(p => p.id !== id)
+                .filter(p => p.id !== mappedProduct.id)
                 .slice(0, 4)
                 .map(mapApiProductToLocal);
               setRelatedProducts(mappedRelated);
@@ -125,7 +142,21 @@ const ProductDetailPage: React.FC = () => {
     };
 
     loadProduct();
-  }, [id]);
+  }, [id, slug]);
+
+  // Site-wide config: WhatsApp contact number + admin-managed pickup locations
+  useEffect(() => {
+    getPublicSiteSettings().then((response) => {
+      if (response.success && response.data?.whatsapp_number) {
+        setWhatsappNumber(response.data.whatsapp_number);
+      }
+    });
+    getPublicStoreLocations().then((response) => {
+      if (response.success && response.data) {
+        setPickupLocations(response.data);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!imageRef.current || !contentRef.current || !product) return;
@@ -156,6 +187,42 @@ const ProductDetailPage: React.FC = () => {
     openCart();
   };
 
+  const handleBuyNow = () => {
+    if (!product) return;
+    for (let i = 0; i < quantity; i++) {
+      addItem(product);
+    }
+    navigate('/checkout');
+  };
+
+  const handleToggleWishlist = () => {
+    if (!product) return;
+    const added = toggleWishlist(product);
+    toast.success(added ? 'Added to wishlist' : 'Removed from wishlist');
+  };
+
+  const handleToggleCompare = () => {
+    if (!product) return;
+    const result = toggleCompare(product);
+    if (result === 'added') toast.success('Added to compare');
+    else if (result === 'removed') toast.success('Removed from compare');
+    else toast.error('You can compare up to 4 products at a time');
+  };
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: product?.name, url });
+      } catch {
+        // user cancelled the share sheet — nothing to do
+      }
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard');
+    }
+  };
+
   // Get images from product media or use main image
   const getImages = () => {
     if (!product) return [];
@@ -168,12 +235,45 @@ const ProductDetailPage: React.FC = () => {
   };
 
   const images = product ? getImages() : [];
+  const showPrevImage = () => setSelectedImage((i) => (i - 1 + images.length) % images.length);
+  const showNextImage = () => setSelectedImage((i) => (i + 1) % images.length);
+
+  const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setZoomOrigin({ x, y });
+  };
+
+  const handleImageMouseLeave = () => {
+    setIsImageZoomed(false);
+    setZoomOrigin({ x: 50, y: 50 });
+  };
+
+  const warrantyFeature = product?.keyFeatures?.find((f) => f.key.toLowerCase() === 'warranty');
+  const skuFeature = product?.keyFeatures?.find((f) => f.key.toLowerCase() === 'sku');
+  const specFeatures = product?.keyFeatures?.filter((f) => f !== warrantyFeature && f !== skuFeature) || [];
+
+  // Deterministic per-product "watching now" count — a stable urgency indicator, not live analytics.
+  const watcherCount = useMemo(() => {
+    if (!product) return 0;
+    let hash = 0;
+    for (let i = 0; i < product.id.length; i++) {
+      hash = (hash * 31 + product.id.charCodeAt(i)) >>> 0;
+    }
+    return 3 + (hash % 15);
+  }, [product?.id]);
+
+  const whatsappHref = product && whatsappNumber
+    ? `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi, is "${product.name}" available?`)}`
+    : undefined;
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-4xl font-orbitron font-bold mb-4">Loading...</h1>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center py-32">
+          <Loader label="Loading..." />
         </div>
       </div>
     );
@@ -181,12 +281,15 @@ const ProductDetailPage: React.FC = () => {
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-4xl font-orbitron font-bold mb-4">Product Not Found</h1>
-          <Link to="/products" className="text-primary hover:underline">
-            Back to Products
-          </Link>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center py-32">
+          <div className="text-center">
+            <h1 className="text-4xl font-orbitron font-bold mb-4">Product Not Found</h1>
+            <Link to="/products" className="text-primary hover:underline">
+              Back to Products
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -208,215 +311,289 @@ const ProductDetailPage: React.FC = () => {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 text-sm text-muted-foreground mb-8"
+            className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mb-8"
           >
-            <Link to="/products" className="hover:text-primary transition-colors flex items-center gap-1">
+            <Link to="/" className="hover:text-primary transition-colors flex items-center gap-1">
               <ChevronLeft className="w-4 h-4" />
-              Products
+              Home
             </Link>
+            {product.category && (
+              <>
+                <span>/</span>
+                <Link
+                  to={categoryId ? `/products?category_id=${categoryId}` : '/products'}
+                  className="hover:text-primary transition-colors"
+                >
+                  {product.category}
+                </Link>
+              </>
+            )}
             <span>/</span>
-            <span className="text-foreground">{product.name}</span>
+            <span className="text-foreground line-clamp-1">{product.name}</span>
           </motion.div>
 
-          <div className="grid lg:grid-cols-2 gap-12">
-            {/* Image Gallery */}
-            <div ref={imageRef}>
-              <NeonCard className="p-4 mb-4" glowColor="cyan" hover={false}>
-                <div className="aspect-square overflow-hidden rounded-lg bg-muted">
-                  {images.length > 0 && (
-                    <motion.img
-                      key={selectedImage}
-                      src={images[selectedImage] || images[0]}
-                      alt={product.name}
-                      className="w-full h-full object-cover"
-                      initial={{ scale: 1.1, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ duration: 0.5 }}
-                    />
-                  )}
-                </div>
-              </NeonCard>
-              
-              {/* Thumbnails */}
+          <div className="grid lg:grid-cols-2 gap-12 items-start">
+            {/* Image Gallery — sticks in place while the info column scrolls past it */}
+            <div ref={imageRef} className="lg:sticky lg:top-20 self-start w-full max-w-[620px] lg:ml-auto">
               <div className="flex gap-3">
-                {images.map((img, i) => (
-                  <motion.button
-                    key={i}
-                    onClick={() => setSelectedImage(i)}
+                {/* Thumbnails — vertical column on the left */}
+                {images.length > 1 && (
+                  <div className="flex max-h-[480px] shrink-0 flex-col gap-3 overflow-y-auto">
+                    {images.map((img, i) => (
+                      <motion.button
+                        key={i}
+                        onClick={() => setSelectedImage(i)}
+                        className={cn(
+                          "h-20 w-20 shrink-0 rounded-lg overflow-hidden border-2 bg-white p-1 transition-all",
+                          selectedImage === i
+                            ? "border-primary shadow-[0_0_15px_hsl(var(--neon-cyan)/0.5)]"
+                            : "border-border hover:border-primary/50"
+                        )}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <img src={img} alt="" className="w-full h-full object-contain" />
+                      </motion.button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Main image */}
+                <NeonCard className="flex-1 p-4" glowColor="cyan" hover={false}>
+                  <div
                     className={cn(
-                      "w-20 h-20 rounded-lg overflow-hidden border-2 transition-all",
-                      selectedImage === i
-                        ? "border-primary shadow-[0_0_15px_hsl(var(--neon-cyan)/0.5)]"
-                        : "border-border hover:border-primary/50"
+                      "relative aspect-square overflow-hidden rounded-lg bg-white p-6",
+                      images.length > 0 && "cursor-zoom-in"
                     )}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                    onMouseEnter={() => setIsImageZoomed(true)}
+                    onMouseLeave={handleImageMouseLeave}
+                    onMouseMove={handleImageMouseMove}
                   >
-                    <img src={img} alt="" className="w-full h-full object-cover" />
-                  </motion.button>
-                ))}
+                    {images.length > 0 && (
+                      <motion.img
+                        key={selectedImage}
+                        src={images[selectedImage] || images[0]}
+                        alt={product.name}
+                        className="w-full h-full object-contain"
+                        style={{ transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%` }}
+                        initial={{ scale: 1.1, opacity: 0 }}
+                        animate={{ scale: isImageZoomed ? 2 : 1, opacity: 1 }}
+                        transition={{ duration: isImageZoomed ? 0.15 : 0.3 }}
+                      />
+                    )}
+                    {images.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={showPrevImage}
+                          aria-label="Previous image"
+                          className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-background/80 text-foreground shadow-md hover:bg-primary hover:text-primary-foreground transition-colors"
+                        >
+                          <ChevronLeft className="h-5 w-5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={showNextImage}
+                          aria-label="Next image"
+                          className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-background/80 text-foreground shadow-md hover:bg-primary hover:text-primary-foreground transition-colors"
+                        >
+                          <ChevronRight className="h-5 w-5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </NeonCard>
               </div>
             </div>
 
             {/* Product Info */}
-            <div ref={contentRef} className="flex h-full flex-col justify-center">
-              <div className="animate-item flex items-center gap-3 mb-4">
-                <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-mono-tech uppercase rounded">
-                  {product.category}
-                </span>
-                {product.in_stock ? (
-                  <span className="flex items-center gap-1 text-accent text-sm">
-                    <Check className="w-4 h-4" /> In Stock
-                  </span>
-                ) : (
-                  <span className="text-destructive text-sm">Out of Stock</span>
-                )}
-              </div>
-
-              <h1 className="animate-item font-orbitron text-3xl md:text-4xl font-bold text-foreground mb-4">
+            <div ref={contentRef}>
+              <h1 className="animate-item font-orbitron text-2xl md:text-3xl font-bold text-foreground mb-4">
                 {product.name}
               </h1>
 
-              {/* Rating */}
-              <div className="animate-item flex items-center gap-2 mb-6">
-                <div className="flex">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star
-                      key={i}
-                      className={cn(
-                        "w-5 h-5",
-                        i < Math.floor(product.rating)
-                          ? "text-neon-orange fill-neon-orange"
-                          : "text-muted-foreground"
-                      )}
-                    />
+              {/* Key feature bullets */}
+              {specFeatures.length > 0 && (
+                <ul className="animate-item space-y-1.5 text-sm mb-4">
+                  {specFeatures.map((feature) => (
+                    <li key={feature.key} className="flex items-start gap-1.5">
+                      <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
+                      <span>
+                        <span className="font-semibold text-foreground">{feature.key}:</span>{' '}
+                        <span className="text-muted-foreground">{feature.value}</span>
+                      </span>
+                    </li>
                   ))}
-                </div>
-                <span className="text-muted-foreground">
-                  {product.rating} ({product.reviews} reviews)
-                </span>
-              </div>
+                </ul>
+              )}
 
-              {/* Price or Out of Stock */}
-              <div className="animate-item flex items-baseline gap-4 mb-8">
+              {warrantyFeature && (
+                <p className="animate-item text-sm font-bold text-primary mb-1">
+                  Warranty: {warrantyFeature.value}
+                </p>
+              )}
+              {skuFeature && (
+                <p className="animate-item text-xs text-muted-foreground mb-4">
+                  SKU: {skuFeature.value}
+                </p>
+              )}
+
+              {/* Price + stock */}
+              <div className="animate-item flex flex-wrap items-center gap-4 mb-6">
                 {product.in_stock === false ? (
                   <span className="font-orbitron text-3xl font-bold text-destructive">
                     Out of Stock
                   </span>
                 ) : (
                   <>
-                    <span className="font-orbitron text-4xl font-bold text-primary">
+                    <span className="font-orbitron text-3xl font-bold text-primary">
                       AED {product.price.toLocaleString()}
                     </span>
                     {product.originalPrice && (
-                      <>
-                        <span className="text-xl text-muted-foreground line-through">
-                          AED {product.originalPrice.toLocaleString()}
-                        </span>
-                        <span className="px-2 py-1 bg-destructive text-destructive-foreground text-sm font-bold rounded">
-                          SAVE AED {(product.originalPrice - product.price).toLocaleString()}
-                        </span>
-                      </>
+                      <span className="text-lg text-muted-foreground line-through">
+                        AED {product.originalPrice.toLocaleString()}
+                      </span>
                     )}
                   </>
+                )}
+
+                {product.in_stock !== false && (
+                  <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+                    </span>
+                    {product.stock > 0 && product.stock <= LOW_STOCK_THRESHOLD
+                      ? `Only ${product.stock} left in stock`
+                      : 'In stock'}
+                  </span>
                 )}
               </div>
 
               <div className="space-y-8">
-              {/* Quantity & Add to Cart - only show if in stock */}
-              {product.in_stock !== false ? (
-                <div className="animate-item flex flex-col sm:flex-row gap-4">
-                  <div className="flex items-center bg-muted rounded-lg">
-                    <motion.button
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
-                      whileTap={{ scale: 0.9 }}
+                {/* Quantity, Add to Cart & Buy Now — only if in stock */}
+                {product.in_stock !== false && (
+                  <div className="animate-item flex flex-col sm:flex-row gap-3">
+                    <div className="flex items-center bg-muted rounded-lg">
+                      <motion.button
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                        className="px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        <Minus className="w-5 h-5" />
+                      </motion.button>
+                      <span className="w-12 text-center font-mono-tech text-lg">{quantity}</span>
+                      <motion.button
+                        onClick={() => setQuantity(quantity + 1)}
+                        className="px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        <Plus className="w-5 h-5" />
+                      </motion.button>
+                    </div>
+
+                    <CyberButton size="lg" className="flex-1 gap-2" onClick={handleAddToCart}>
+                      <ShoppingCart className="w-5 h-5" />
+                      Add to Cart
+                    </CyberButton>
+
+                    <button
+                      type="button"
+                      onClick={handleBuyNow}
+                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-border bg-black px-8 py-4 text-base font-orbitron font-semibold uppercase tracking-wider text-white transition-colors hover:bg-black/85"
                     >
-                      <Minus className="w-5 h-5" />
-                    </motion.button>
-                    <span className="w-12 text-center font-mono-tech text-lg">{quantity}</span>
-                    <motion.button
-                      onClick={() => setQuantity(quantity + 1)}
-                      className="px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
-                      whileTap={{ scale: 0.9 }}
+                      Buy Now
+                    </button>
+                  </div>
+                )}
+
+                {/* WhatsApp availability check */}
+                {whatsappHref && (
+                  <a
+                    href={whatsappHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="animate-item flex items-center gap-3 rounded-full bg-[#25D366] px-5 py-3 text-white shadow-md transition hover:brightness-95 w-fit"
+                  >
+                    <WhatsAppIcon className="w-7 h-7 shrink-0" />
+                    <span className="text-left leading-tight">
+                      <span className="block text-xs opacity-90">Customer Care</span>
+                      <span className="block text-sm font-bold">Check Availability</span>
+                    </span>
+                  </a>
+                )}
+
+                {/* Compare / Wishlist / Share */}
+                <div className="animate-item flex flex-wrap items-center gap-6 border-t border-border pt-6 text-sm">
+                  <button
+                    type="button"
+                    onClick={handleToggleCompare}
+                    className={cn(
+                      "flex items-center gap-2 transition-colors",
+                      isCompared ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Scale className="w-4 h-4" />
+                    {isCompared ? 'Added to Compare' : 'Compare'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleToggleWishlist}
+                    className={cn(
+                      "flex items-center gap-2 transition-colors",
+                      isWishlisted ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Heart className={cn("w-4 h-4", isWishlisted && "fill-current")} />
+                    {isWishlisted ? 'Wishlisted' : 'Add to wishlist'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share
+                  </button>
+                </div>
+
+                {/* Watching now banner */}
+                <div className="animate-item flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm font-semibold text-primary">
+                  <Eye className="w-4 h-4 shrink-0" />
+                  {watcherCount} people are watching this product right now!
+                </div>
+
+                {/* Delivery & pickup */}
+                <div className="animate-item space-y-3">
+                  {pickupLocations.map((location) => (
+                    <div
+                      key={location.id}
+                      className="flex items-center justify-between gap-4 rounded-lg border border-border p-4"
                     >
-                      <Plus className="w-5 h-5" />
-                    </motion.button>
+                      <div className="flex items-center gap-3">
+                        <MapPin className="w-5 h-5 text-primary shrink-0" />
+                        <div className="text-sm">
+                          <p className="font-semibold text-foreground">Pick up from {location.name}</p>
+                          <p className="text-muted-foreground">
+                            {[location.address, location.city].filter(Boolean).join(', ')}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-semibold text-accent shrink-0">Free</span>
+                    </div>
+                  ))}
+
+                  <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+                    <div className="flex items-center gap-3">
+                      <Truck className="w-5 h-5 text-primary shrink-0" />
+                      <div className="text-sm">
+                        <p className="font-semibold text-foreground">Courier delivery</p>
+                        <p className="text-muted-foreground">Delivered in 2-3 business days</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold text-accent shrink-0">Free</span>
                   </div>
-
-                  <CyberButton 
-                    size="lg" 
-                    className="flex-1"
-                    onClick={handleAddToCart}
-                  >
-                    <ShoppingCart className="w-5 h-5 mr-2" />
-                    ADD TO CART
-                  </CyberButton>
-
-                  <motion.button
-                    onClick={() => setIsWishlisted(!isWishlisted)}
-                    className={cn(
-                      "p-4 rounded-lg border transition-all",
-                      isWishlisted
-                        ? "bg-destructive/10 border-destructive text-destructive"
-                        : "bg-muted border-border text-muted-foreground hover:text-foreground"
-                    )}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Heart className={cn("w-5 h-5", isWishlisted && "fill-current")} />
-                  </motion.button>
-
-                  <motion.button
-                    className="p-4 rounded-lg bg-muted border border-border text-muted-foreground hover:text-foreground transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Share2 className="w-5 h-5" />
-                  </motion.button>
                 </div>
-              ) : (
-                <div className="animate-item flex gap-4">
-                  <motion.button
-                    onClick={() => setIsWishlisted(!isWishlisted)}
-                    className={cn(
-                      "p-4 rounded-lg border transition-all",
-                      isWishlisted
-                        ? "bg-destructive/10 border-destructive text-destructive"
-                        : "bg-muted border-border text-muted-foreground hover:text-foreground"
-                    )}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Heart className={cn("w-5 h-5", isWishlisted && "fill-current")} />
-                  </motion.button>
-
-                  <motion.button
-                    className="p-4 rounded-lg bg-muted border border-border text-muted-foreground hover:text-foreground transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Share2 className="w-5 h-5" />
-                  </motion.button>
-                </div>
-              )}
-
-              {/* Features */}
-              <div className="animate-item grid grid-cols-3 gap-4">
-                {[
-                  { icon: Truck, label: 'Free Shipping' },
-                  { icon: Shield, label: '3yr Warranty' },
-                  { icon: RotateCcw, label: '30-Day Returns' },
-                ].map((feature) => (
-                  <div
-                    key={feature.label}
-                    className="flex flex-col items-center gap-2 p-4 bg-muted/50 rounded-lg text-center"
-                  >
-                    <feature.icon className="w-6 h-6 text-primary" />
-                    <span className="text-xs text-muted-foreground">{feature.label}</span>
-                  </div>
-                ))}
-              </div>
               </div>
             </div>
           </div>

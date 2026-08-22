@@ -17,6 +17,7 @@ import {
 import AdminLayout from '@/components/layout/AdminLayout';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Loader } from '@/components/ui/Loader';
 import { getDashboardStatistics, type DashboardStatistics } from '@/services/api';
 import { toast } from 'sonner';
 
@@ -137,7 +138,11 @@ const AdminDashboardPage: React.FC = () => {
             onClick={loadStatistics}
             disabled={isLoading}
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            {isLoading ? (
+              <Loader size="sm" className="mr-2" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
             Refresh
           </CyberButton>
         </div>
@@ -147,7 +152,7 @@ const AdminDashboardPage: React.FC = () => {
             {[1, 2, 3].map((index) => (
               <NeonCard key={index} className="p-6 h-full" glowColor="cyan" hover={false}>
                 <div className="flex items-center justify-center h-32">
-                  <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+                  <Loader size="md" />
                 </div>
               </NeonCard>
             ))}

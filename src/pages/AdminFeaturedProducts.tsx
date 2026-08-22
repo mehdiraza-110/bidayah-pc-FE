@@ -12,18 +12,19 @@ import {
 import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Loader } from '@/components/ui/Loader';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Product } from '@/data/products';
-import { 
+import {
   getProducts,
   updateProduct,
   getCategories,
   getVendors,
   type Category,
   type Vendor,
-  type Product as ApiProduct
 } from '@/services/api';
+import { mapApiProductToLocal } from '@/lib/mapProduct';
 import { cn } from '@/lib/utils';
 
 const AdminFeaturedProductsPage: React.FC = () => {
@@ -44,29 +45,6 @@ const AdminFeaturedProductsPage: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(12);
   
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Helper function to convert API Product to local Product format
-  const mapApiProductToLocal = (apiProduct: ApiProduct): Product => {
-    return {
-      id: apiProduct.id,
-      name: apiProduct.name,
-      category: apiProduct.category_name || apiProduct.category_id || '',
-      price: Number(apiProduct.price),
-      originalPrice: apiProduct.original_price ? Number(apiProduct.original_price) : undefined,
-      image: apiProduct.image,
-      description: apiProduct.description,
-      specs: apiProduct.specs?.map(s => s.spec_text) || [],
-      rating: apiProduct.rating || 0,
-      reviews: apiProduct.reviews_count || 0,
-      stock: apiProduct.stock,
-      in_stock: apiProduct.in_stock,
-      vendor_id: apiProduct.vendor_id,
-      status: apiProduct.status || 'published',
-      featured: apiProduct.featured,
-      new: apiProduct.new_product,
-      media: apiProduct.media?.map(m => ({ url: m.url, type: m.type })) || [],
-    };
-  };
 
   useEffect(() => {
     if (containerRef.current) {
@@ -285,9 +263,7 @@ const AdminFeaturedProductsPage: React.FC = () => {
 
         {/* Products List */}
         {isLoading ? (
-          <div className="text-center py-16">
-            <p className="text-muted-foreground">Loading products...</p>
-          </div>
+          <Loader label="Loading products..." />
         ) : paginatedProducts.length === 0 ? (
           <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
             <p className="text-muted-foreground text-lg">No products found</p>

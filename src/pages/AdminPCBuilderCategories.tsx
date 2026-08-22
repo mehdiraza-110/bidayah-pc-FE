@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Folder,
   ListOrdered,
+  Minus,
   Plus,
   Save,
   X,
@@ -13,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { CyberButton } from '@/components/ui/CyberButton';
+import { Loader } from '@/components/ui/Loader';
 import { NeonCard } from '@/components/ui/NeonCard';
 import {
   getPCBuilderCategoryConfig,
@@ -49,10 +51,14 @@ const AdminPCBuilderCategoriesPage: React.FC = () => {
       const response = await getPCBuilderCategoryConfig();
 
       if (response.success && response.data) {
-        const included = response.data
+        const withDefaults = response.data.map(category => ({
+          ...category,
+          max_quantity: category.max_quantity ?? 1,
+        }));
+        const included = withDefaults
           .filter(category => category.is_active)
           .sort((a, b) => a.display_order - b.display_order);
-        const available = response.data
+        const available = withDefaults
           .filter(category => !category.is_active)
           .sort((a, b) => a.category_name.localeCompare(b.category_name));
 
@@ -71,6 +77,17 @@ const AdminPCBuilderCategoriesPage: React.FC = () => {
   const handleInclude = (category: PCBuilderCategoryConfig) => {
     setAvailableRows(prev => prev.filter(item => item.category_id !== category.category_id));
     setIncludedRows(prev => [...prev, { ...category, is_active: true }]);
+    setIsDirty(true);
+  };
+
+  const handleMaxQuantityChange = (categoryId: string, delta: 1 | -1) => {
+    setIncludedRows(prev =>
+      prev.map(item =>
+        item.category_id === categoryId
+          ? { ...item, max_quantity: Math.max(1, Math.min(20, item.max_quantity + delta)) }
+          : item
+      )
+    );
     setIsDirty(true);
   };
 
@@ -104,11 +121,13 @@ const AdminPCBuilderCategoriesPage: React.FC = () => {
         category_id: row.category_id,
         display_order: index,
         is_active: true,
+        max_quantity: row.max_quantity,
       })),
       ...availableRows.map(row => ({
         category_id: row.category_id,
         display_order: 0,
         is_active: false,
+        max_quantity: row.max_quantity,
       })),
     ];
 
@@ -149,11 +168,7 @@ const AdminPCBuilderCategoriesPage: React.FC = () => {
             </div>
             <CyberButton size="md" glowColor="cyan" onClick={handleSave} disabled={!isDirty || isSubmitting}>
               {isSubmitting ? (
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                />
+                <Loader size="sm" />
               ) : (
                 <Save className="w-4 h-4" />
               )}
@@ -164,12 +179,7 @@ const AdminPCBuilderCategoriesPage: React.FC = () => {
 
         {isLoading ? (
           <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-              className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto"
-            />
-            <p className="text-muted-foreground mt-4">Loading PC builder categories...</p>
+            <Loader label="Loading PC builder categories..." />
           </NeonCard>
         ) : (
           <div className="grid lg:grid-cols-2 gap-6">
@@ -206,6 +216,28 @@ const AdminPCBuilderCategoriesPage: React.FC = () => {
                       <span className="flex-1 min-w-0 font-rajdhani font-semibold truncate">
                         {category.category_name}
                       </span>
+                      <div className="hidden sm:flex items-center gap-1.5 shrink-0 mr-1" title="Max quantity a customer can add for this step">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-0.5">Max Qty</span>
+                        <button
+                          type="button"
+                          onClick={() => handleMaxQuantityChange(category.category_id, -1)}
+                          disabled={category.max_quantity <= 1}
+                          className="p-1 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-6 text-center font-mono-tech text-xs">
+                          {category.max_quantity}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleMaxQuantityChange(category.category_id, 1)}
+                          disabled={category.max_quantity >= 20}
+                          className="p-1 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"

@@ -9,11 +9,12 @@ import FeaturedSection from '@/components/sections/FeaturedSection';
 import FeaturesSection from '@/components/sections/FeaturesSection';
 import CategoriesSection from '@/components/sections/CategoriesSection';
 import CategoryShowcaseSection from '@/components/sections/CategoryShowcaseSection';
-import BlogFaqSection from '@/components/sections/BlogFaqSection';
+import FeaturedBlogsSection from '@/components/sections/FeaturedBlogsSection';
+import FaqSection from '@/components/sections/FaqSection';
 
 // One stacked section per category, mirroring the competitor's homepage layout.
 const CATEGORY_SHOWCASES = [
-  { title: 'Graphics Cards', matchTerms: ['gpu', 'graphics'] },
+  { title: 'Graphics Cards', matchTerms: ['gpu', 'graphics'], limit: 12 },
   { title: 'Gaming Laptops', matchTerms: ['laptop'] },
   { title: 'Monitors', matchTerms: ['monitor'] },
   { title: 'Processors', matchTerms: ['cpu', 'processor'] },
@@ -42,11 +43,13 @@ const Index: React.FC = () => {
             key={showcase.title}
             title={showcase.title}
             matchTerms={showcase.matchTerms}
+            limit={showcase.limit}
             tinted={index % 2 === 1}
           />
         ))}
         <FeaturesSection />
-        <BlogFaqSection />
+        <FeaturedBlogsSection />
+        <FaqSection />
       </main>
 
       <Footer />

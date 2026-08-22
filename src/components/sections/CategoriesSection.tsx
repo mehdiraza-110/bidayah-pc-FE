@@ -2,30 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
-import { getPublicCategories, getPublicProducts, type Category, type Product as ApiProduct } from '@/services/api';
+import { getPublicCategories, getPublicProducts, type Category } from '@/services/api';
 import { Product } from '@/data/products';
 import { ProductCard } from '@/components/products/ProductCard';
 import { CyberButton } from '@/components/ui/CyberButton';
-
-const mapApiProductToLocal = (apiProduct: ApiProduct): Product => ({
-  id: apiProduct.id,
-  name: apiProduct.name,
-  category: apiProduct.category_name || apiProduct.category_id || '',
-  price: Number(apiProduct.price),
-  originalPrice: apiProduct.original_price ? Number(apiProduct.original_price) : undefined,
-  image: apiProduct.image,
-  description: apiProduct.description,
-  specs: apiProduct.specs?.map((s) => s.spec_text) || [],
-  rating: apiProduct.rating || 0,
-  reviews: apiProduct.reviews_count || 0,
-  stock: apiProduct.stock,
-  in_stock: apiProduct.in_stock,
-  vendor_id: apiProduct.vendor_id,
-  status: apiProduct.status || 'published',
-  featured: apiProduct.featured,
-  new: apiProduct.new_product,
-  media: apiProduct.media?.map((m) => ({ url: m.url, type: m.type })) || [],
-});
+import { Loader } from '@/components/ui/Loader';
+import { mapApiProductToLocal } from '@/lib/mapProduct';
+import { sortByCategoryPriority } from '@/lib/categoryPriority';
 
 const CategoriesSection: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -40,8 +23,9 @@ const CategoriesSection: React.FC = () => {
       try {
         const response = await getPublicCategories();
         if (response.success && response.data && response.data.length > 0) {
-          setCategories(response.data);
-          setActiveCategoryId(response.data[0].id);
+          const sorted = sortByCategoryPriority(response.data);
+          setCategories(sorted);
+          setActiveCategoryId(sorted[0].id);
         }
       } catch (error) {
         console.error('Error loading categories:', error);
@@ -85,7 +69,7 @@ const CategoriesSection: React.FC = () => {
     return (
       <section className="py-24 bg-card/50">
         <div className="container mx-auto px-4 text-center">
-          <p className="text-muted-foreground">Loading categories...</p>
+          <Loader label="Loading categories..." />
         </div>
       </section>
     );
@@ -115,28 +99,42 @@ const CategoriesSection: React.FC = () => {
         </motion.div>
 
         {/* Category tabs */}
-        <div className="flex justify-start gap-8 overflow-x-auto border-b border-border pb-px sm:justify-center">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setActiveCategoryId(category.id)}
-              className={`shrink-0 whitespace-nowrap border-b-2 px-1 pb-3 font-rajdhani text-sm font-semibold uppercase tracking-wider transition-colors ${
-                activeCategoryId === category.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {category.category_name}
-            </button>
-          ))}
+        <div className="relative">
+          <div className="scrollbar-hide flex justify-start gap-2 overflow-x-auto px-1 py-1 sm:justify-center sm:flex-wrap sm:gap-3 sm:overflow-visible">
+            {categories.map((category) => {
+              const isActive = activeCategoryId === category.id;
+              return (
+                <button
+                  key={category.id}
+                  onClick={() => setActiveCategoryId(category.id)}
+                  className={`relative shrink-0 whitespace-nowrap rounded-full px-5 py-2.5 font-rajdhani text-sm font-semibold uppercase tracking-wider transition-colors ${
+                    isActive ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="category-pill"
+                      className="absolute inset-0 rounded-full bg-primary"
+                      transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                    />
+                  )}
+                  <span className="relative z-10">{category.category_name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Edge fades hint that the row scrolls, instead of a bare scrollbar */}
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-card to-transparent sm:hidden" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent sm:hidden" />
         </div>
 
         {/* Products for active category */}
         <div className="mt-10">
           {isLoadingProducts ? (
-            <div className="py-16 text-center text-muted-foreground">Loading products...</div>
+            <Loader />
           ) : products.length > 0 ? (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
               {products.map((product, index) => (
                 <ProductCard key={product.id} product={product} index={index} />
               ))}

@@ -18,6 +18,9 @@ import {
   SlidersHorizontal,
   ListOrdered,
   Cpu,
+  MapPin,
+  Settings,
+  Newspaper,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GridBackground } from '@/components/effects/GridBackground';
@@ -55,6 +58,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       icon: Folder,
     },
     {
+      name: 'Blogs',
+      path: '/admin/blogs',
+      icon: Newspaper,
+    },
+    {
       name: 'Customization',
       path: '/admin/customization',
       icon: Palette,
@@ -90,9 +98,19 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       icon: CreditCard,
     },
     {
+      name: 'Store Locations',
+      path: '/admin/store-locations',
+      icon: MapPin,
+    },
+    {
       name: 'Analytics',
       path: '/admin/analytics',
       icon: BarChart3,
+    },
+    {
+      name: 'Settings',
+      path: '/admin/settings',
+      icon: Settings,
     },
   ];
 

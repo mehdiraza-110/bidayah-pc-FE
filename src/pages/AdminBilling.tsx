@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import gsap from 'gsap';
 import {
   CreditCard,
@@ -10,6 +9,7 @@ import {
 } from 'lucide-react';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Loader } from '@/components/ui/Loader';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CyberButton } from '@/components/ui/CyberButton';
@@ -185,9 +185,7 @@ const AdminBillingPage: React.FC = () => {
     return (
       <AdminLayout>
         <div className="p-6" ref={containerRef}>
-          <div className="text-center py-16">
-            <p className="text-muted-foreground">Loading billing information...</p>
-          </div>
+          <Loader label="Loading billing information..." />
         </div>
       </AdminLayout>
     );
@@ -385,14 +383,7 @@ const AdminBillingPage: React.FC = () => {
               disabled={isSaving}
             >
               {isSaving ? (
-                <span className="flex items-center gap-2">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                  />
-                  SAVING...
-                </span>
+                <Loader size="sm" label="SAVING..." />
               ) : (
                 <span className="flex items-center gap-2">
                   <Save className="w-4 h-4" />

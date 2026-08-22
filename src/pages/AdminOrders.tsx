@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Loader } from '@/components/ui/Loader';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CyberButton } from '@/components/ui/CyberButton';
@@ -289,7 +290,11 @@ const AdminOrdersPage: React.FC = () => {
                   className="p-1 hover:bg-muted rounded transition-colors"
                   title="Refresh orders"
                 >
-                  <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+                  {isLoading ? (
+                    <Loader size="sm" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
                 </button>
               </div>
               <div className="flex items-center gap-2">
@@ -331,8 +336,7 @@ const AdminOrdersPage: React.FC = () => {
                 {isLoading ? (
                   <tr>
                     <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                      <RefreshCw className="w-6 h-6 mx-auto mb-2 animate-spin" />
-                      Loading orders...
+                      <Loader label="Loading orders..." size="md" />
                     </td>
                   </tr>
                 ) : orders.length === 0 ? (

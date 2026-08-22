@@ -11,19 +11,34 @@ import {
   X,
   Check,
   AlertCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { CyberButton } from '@/components/ui/CyberButton';
+import { Loader } from '@/components/ui/Loader';
 import { NeonCard } from '@/components/ui/NeonCard';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { 
-  getVendors, 
-  createVendor, 
-  updateVendor, 
-  deleteVendor, 
-  type Vendor 
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+} from '@/components/ui/alert-dialog';
+import { ImpactProductsModal } from '@/components/ui/ImpactProductsModal';
+import {
+  getVendors,
+  createVendor,
+  updateVendor,
+  deleteVendor,
+  getVendorUnpublishImpact,
+  getVendorUnpublishImpactProducts,
+  setVendorPublishStatus,
+  type Vendor
 } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +54,13 @@ const AdminVendorsPage: React.FC = () => {
   const [formData, setFormData] = useState<Partial<Vendor>>({
     vendor_name: '',
   });
+
+  // Unpublish confirmation (cascades to this vendor's products)
+  const [unpublishTarget, setUnpublishTarget] = useState<Vendor | null>(null);
+  const [unpublishImpact, setUnpublishImpact] = useState<{ productCount: number } | null>(null);
+  const [isLoadingImpact, setIsLoadingImpact] = useState(false);
+  const [isTogglingId, setIsTogglingId] = useState<string | null>(null);
+  const [isImpactProductsOpen, setIsImpactProductsOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -151,6 +173,46 @@ const AdminVendorsPage: React.FC = () => {
     }
   };
 
+  const handleTogglePublish = async (vendor: Vendor) => {
+    if (vendor.is_published === false) {
+      // Re-publishing is non-destructive — no confirmation needed.
+      setIsTogglingId(vendor.id);
+      const response = await setVendorPublishStatus(vendor.id, true);
+      if (response.success && response.data) {
+        setVendorList(prev => prev.map(v => (v.id === vendor.id ? response.data!.vendor : v)));
+        toast.success(response.message || 'Vendor published');
+      } else {
+        toast.error(response.message || 'Failed to publish vendor');
+      }
+      setIsTogglingId(null);
+      return;
+    }
+
+    // Unpublishing cascades to this vendor's products — preview the impact first.
+    setUnpublishTarget(vendor);
+    setIsImpactProductsOpen(false);
+    setIsLoadingImpact(true);
+    const response = await getVendorUnpublishImpact(vendor.id);
+    setUnpublishImpact(response.success && response.data ? response.data : { productCount: 0 });
+    setIsLoadingImpact(false);
+  };
+
+  const handleConfirmUnpublish = async () => {
+    if (!unpublishTarget) return;
+
+    setIsTogglingId(unpublishTarget.id);
+    const response = await setVendorPublishStatus(unpublishTarget.id, false);
+    if (response.success && response.data) {
+      setVendorList(prev => prev.map(v => (v.id === unpublishTarget.id ? response.data!.vendor : v)));
+      toast.success(response.message || 'Vendor unpublished');
+    } else {
+      toast.error(response.message || 'Failed to unpublish vendor');
+    }
+    setIsTogglingId(null);
+    setUnpublishTarget(null);
+    setUnpublishImpact(null);
+  };
+
   const handleEdit = (vendor: Vendor) => {
     navigate(`/admin/vendors/${vendor.id}`);
     setIsFormOpen(true);
@@ -219,14 +281,7 @@ const AdminVendorsPage: React.FC = () => {
                   <div className="flex gap-4 pt-4 border-t border-border">
                     <CyberButton type="submit" size="lg" disabled={isSubmitting}>
                       {isSubmitting ? (
-                        <span className="flex items-center gap-2">
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                            className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                          />
-                          SAVING...
-                        </span>
+                        <Loader size="sm" label="Saving..." />
                       ) : (
                         <span className="flex items-center gap-2">
                           <Save className="w-4 h-4" />
@@ -259,12 +314,7 @@ const AdminVendorsPage: React.FC = () => {
             >
               {isLoading ? (
                 <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto"
-                  />
-                  <p className="text-muted-foreground mt-4">Loading vendors...</p>
+                  <Loader label="Loading vendors..." />
                 </NeonCard>
               ) : vendorList.length === 0 ? (
                 <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
@@ -302,6 +352,14 @@ const AdminVendorsPage: React.FC = () => {
                               </p>
                             </div>
                           </div>
+                          <span className={cn(
+                            "px-2 py-1 text-xs rounded whitespace-nowrap",
+                            vendor.is_published === false
+                              ? "bg-muted text-muted-foreground"
+                              : "bg-green-500/10 text-green-500"
+                          )}>
+                            {vendor.is_published === false ? 'Unpublished' : 'Published'}
+                          </span>
                         </div>
                         <div className="flex gap-2">
                           <CyberButton
@@ -313,6 +371,16 @@ const AdminVendorsPage: React.FC = () => {
                             <Edit className="w-4 h-4 mr-2" />
                             EDIT
                           </CyberButton>
+                          <motion.button
+                            onClick={() => handleTogglePublish(vendor)}
+                            disabled={isTogglingId === vendor.id}
+                            className="p-2 rounded-lg border border-border text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            aria-label={vendor.is_published === false ? 'Publish vendor' : 'Unpublish vendor'}
+                          >
+                            {vendor.is_published === false ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                          </motion.button>
                           <motion.button
                             onClick={() => handleDelete(vendor.id)}
                             className="p-2 rounded-lg border border-destructive text-destructive hover:bg-destructive/10 transition-colors"
@@ -331,6 +399,71 @@ const AdminVendorsPage: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
+
+      <AlertDialog open={!!unpublishTarget} onOpenChange={(open) => { if (!open) { setUnpublishTarget(null); setUnpublishImpact(null); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unpublish "{unpublishTarget?.vendor_name}"?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                {isLoadingImpact ? (
+                  <Loader size="sm" label="Checking impact..." />
+                ) : (
+                  <>
+                    This will unpublish{' '}
+                    <span className="font-semibold text-foreground">
+                      {unpublishImpact?.productCount ?? 0} product{(unpublishImpact?.productCount ?? 0) === 1 ? '' : 's'}
+                    </span>{' '}
+                    currently sold by this vendor. Those products will no longer be visible on the storefront until you republish them individually.
+                    {(unpublishImpact?.productCount ?? 0) > 0 && (
+                      <div className="mt-3">
+                        <CyberButton
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsImpactProductsOpen(true)}
+                        >
+                          Show Products
+                        </CyberButton>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <CyberButton
+              type="button"
+              variant="outline"
+              onClick={() => { setUnpublishTarget(null); setUnpublishImpact(null); }}
+              disabled={isTogglingId === unpublishTarget?.id}
+            >
+              Cancel
+            </CyberButton>
+            <CyberButton
+              type="button"
+              onClick={handleConfirmUnpublish}
+              disabled={isLoadingImpact || isTogglingId === unpublishTarget?.id}
+            >
+              {isTogglingId === unpublishTarget?.id ? (
+                <Loader size="sm" label="Unpublishing..." />
+              ) : (
+                'Unpublish Vendor'
+              )}
+            </CyberButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {unpublishTarget && (
+        <ImpactProductsModal
+          open={isImpactProductsOpen}
+          onOpenChange={setIsImpactProductsOpen}
+          title={`Products to be unpublished — ${unpublishTarget.vendor_name}`}
+          fetchPage={({ limit, offset }) => getVendorUnpublishImpactProducts(unpublishTarget.id, { limit, offset })}
+        />
+      )}
     </AdminLayout>
   );
 };

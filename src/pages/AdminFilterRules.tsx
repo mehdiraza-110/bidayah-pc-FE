@@ -19,6 +19,7 @@ import { CyberButton } from '@/components/ui/CyberButton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Loader } from '@/components/ui/Loader';
 import { Switch } from '@/components/ui/switch';
 import {
   createPCBuilderFilterRule,
@@ -435,14 +436,7 @@ const AdminFilterRulesPage: React.FC = () => {
                   <div className="flex flex-wrap gap-4 pt-4 border-t border-border">
                     <CyberButton type="submit" size="lg" disabled={isSubmitting}>
                       {isSubmitting ? (
-                        <>
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                            className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                          />
-                          SAVING...
-                        </>
+                        <Loader size="sm" label="SAVING..." />
                       ) : (
                         <>
                           <Save className="w-4 h-4" />
@@ -475,12 +469,7 @@ const AdminFilterRulesPage: React.FC = () => {
             >
               {isLoading ? (
                 <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto"
-                  />
-                  <p className="text-muted-foreground mt-4">Loading filter rules...</p>
+                  <Loader label="Loading filter rules..." />
                 </NeonCard>
               ) : rules.length === 0 ? (
                 <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
@@ -579,7 +568,7 @@ const AdminFilterRulesPage: React.FC = () => {
                           <div className="mt-5 pt-5 border-t border-border">
                             <h4 className="font-orbitron text-sm font-bold mb-3">PUBLISHED IN-STOCK PREVIEW</h4>
                             {isPreviewLoading ? (
-                              <p className="text-muted-foreground text-sm">Loading matching products...</p>
+                              <Loader label="Loading matching products..." size="sm" />
                             ) : previewProducts.length === 0 ? (
                               <p className="text-muted-foreground text-sm">No matching products found.</p>
                             ) : (

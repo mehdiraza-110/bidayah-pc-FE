@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import gsap from 'gsap';
 import {
   Settings,
@@ -12,16 +11,53 @@ import {
   User,
   Lock,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { NeonCard } from '@/components/ui/NeonCard';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CyberButton } from '@/components/ui/CyberButton';
+import { Loader } from '@/components/ui/Loader';
+import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
+import { getSiteSettings, updateSiteSettings } from '@/services/api';
 
 const AdminSettingsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [isLoadingWhatsapp, setIsLoadingWhatsapp] = useState(true);
+  const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false);
+
+  useEffect(() => {
+    const loadSiteSettings = async () => {
+      setIsLoadingWhatsapp(true);
+      const response = await getSiteSettings();
+      if (response.success && response.data) {
+        setWhatsappNumber(response.data.whatsapp_number || '');
+      }
+      setIsLoadingWhatsapp(false);
+    };
+
+    loadSiteSettings();
+  }, []);
+
+  const handleSaveWhatsapp = async () => {
+    setIsSavingWhatsapp(true);
+    try {
+      const response = await updateSiteSettings({ whatsapp_number: whatsappNumber.trim() });
+      if (response.success) {
+        toast.success(response.message || 'WhatsApp number updated');
+      } else {
+        toast.error(response.message || 'Failed to update WhatsApp number');
+      }
+    } catch (error) {
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsSavingWhatsapp(false);
+    }
+  };
 
   const [settings, setSettings] = useState({
     siteName: 'NEXUSGEAR',
@@ -77,6 +113,46 @@ const AdminSettingsPage: React.FC = () => {
         </div>
 
         <div className="space-y-6">
+          {/* Customer Care (WhatsApp) */}
+          <NeonCard className="p-6" glowColor="green" hover={false}>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(37, 211, 102, 0.1)' }}>
+                <WhatsAppIcon className="w-5 h-5" style={{ color: '#25D366' }} />
+              </div>
+              <h2 className="font-orbitron text-xl font-bold">CUSTOMER CARE (WHATSAPP)</h2>
+            </div>
+            {isLoadingWhatsapp ? (
+              <Loader size="sm" label="Loading..." />
+            ) : (
+              <>
+                <div className="max-w-sm">
+                  <Label htmlFor="whatsappNumber">WhatsApp Number</Label>
+                  <Input
+                    id="whatsappNumber"
+                    value={whatsappNumber}
+                    onChange={(e) => setWhatsappNumber(e.target.value)}
+                    placeholder="+971 50 224 3294"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Used by the "Check Availability" button on product pages.
+                  </p>
+                </div>
+                <div className="mt-4">
+                  <CyberButton size="md" onClick={handleSaveWhatsapp} disabled={isSavingWhatsapp}>
+                    {isSavingWhatsapp ? (
+                      <Loader size="sm" label="Saving..." />
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <Save className="w-4 h-4" />
+                        SAVE
+                      </span>
+                    )}
+                  </CyberButton>
+                </div>
+              </>
+            )}
+          </NeonCard>
+
           {/* General Settings */}
           <NeonCard className="p-6" glowColor="cyan" hover={false}>
             <div className="flex items-center gap-3 mb-6">
@@ -273,14 +349,7 @@ const AdminSettingsPage: React.FC = () => {
           <div className="flex justify-end">
             <CyberButton size="lg" onClick={handleSave} disabled={isSaving}>
               {isSaving ? (
-                <span className="flex items-center gap-2">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                  />
-                  SAVING...
-                </span>
+                <Loader size="sm" label="Saving..." />
               ) : (
                 <span className="flex items-center gap-2">
                   <Save className="w-4 h-4" />

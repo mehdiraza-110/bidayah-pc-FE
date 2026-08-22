@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Loader } from '@/components/ui/Loader';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { cn } from '@/lib/utils';
 import { getDashboardStatistics, getTopProducts, getMonthlySales, type DashboardStatistics, type TopProduct, type MonthlySalesData } from '@/services/api';
@@ -184,7 +185,11 @@ const AdminAnalyticsPage: React.FC = () => {
             }}
             disabled={isLoading || isLoadingTopProducts || isLoadingMonthlySales}
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading || isLoadingTopProducts || isLoadingMonthlySales ? 'animate-spin' : ''}`} />
+            {isLoading || isLoadingTopProducts || isLoadingMonthlySales ? (
+              <Loader size="sm" className="mr-2" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
             Refresh
           </CyberButton>
         </div>
@@ -195,7 +200,7 @@ const AdminAnalyticsPage: React.FC = () => {
             {[1, 2, 3].map((index) => (
               <NeonCard key={index} className="p-6 h-full" glowColor="cyan" hover={false}>
                 <div className="flex items-center justify-center h-32">
-                  <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+                  <Loader size="md" />
                 </div>
               </NeonCard>
             ))}
@@ -240,7 +245,7 @@ const AdminAnalyticsPage: React.FC = () => {
           </div>
           {isLoadingMonthlySales ? (
             <div className="flex items-center justify-center h-[400px]">
-              <RefreshCw className="w-8 h-8 animate-spin text-muted-foreground" />
+              <Loader size="md" />
             </div>
           ) : chartData.length === 0 ? (
             <div className="flex items-center justify-center h-[400px] text-muted-foreground">
@@ -335,7 +340,7 @@ const AdminAnalyticsPage: React.FC = () => {
           </div>
           {isLoadingTopProducts ? (
             <div className="flex items-center justify-center h-64">
-              <RefreshCw className="w-8 h-8 animate-spin text-muted-foreground" />
+              <Loader size="md" />
             </div>
           ) : topProducts.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">

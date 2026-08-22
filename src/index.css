@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&family=Russo+One&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -346,6 +346,10 @@
     font-family: 'Space Mono', monospace;
   }
 
+  .font-brand {
+    font-family: 'Russo One', sans-serif;
+  }
+
   .perspective-1000 {
     perspective: 1000px;
   }
@@ -361,6 +365,7 @@
   /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 8px;
+    height: 8px;
   }
 
   ::-webkit-scrollbar-track {
@@ -374,5 +379,16 @@
 
   ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, hsl(var(--neon-cyan) / 0.8), hsl(var(--neon-purple) / 0.8));
+  }
+
+  /* Fully hides the scrollbar for horizontally-scrollable rows (chips, carousels)
+     while keeping touch/wheel scroll working. */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }

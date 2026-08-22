@@ -3,9 +3,15 @@ export interface ProductMedia {
   type: 'image' | 'video';
 }
 
+export interface ProductKeyFeature {
+  key: string;
+  value: string;
+}
+
 export interface Product {
   id: string;
   name: string;
+  slug?: string; // Server-generated, unique — used to build clean /product/<category>/<slug> URLs
   category: string;
   price: number;
   originalPrice?: number;
@@ -13,11 +19,13 @@ export interface Product {
   media?: ProductMedia[]; // Array of media (images/videos, max 5)
   description?: string; // Rich text description
   specs: string[];
+  keyFeatures?: ProductKeyFeature[];
   rating: number;
   reviews: number;
   stock: number; // Stock quantity
   in_stock?: boolean; // Stock availability flag
   vendor_id?: string; // Vendor ID
+  vendorName?: string; // Vendor display name
   status?: 'published' | 'draft'; // Product status
   featured?: boolean;
   new?: boolean;

@@ -14,19 +14,35 @@ import {
   Upload,
   Image as ImageIcon,
   Video,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { CyberButton } from '@/components/ui/CyberButton';
+import { Loader } from '@/components/ui/Loader';
 import { NeonCard } from '@/components/ui/NeonCard';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { 
-  getCategories, 
-  createCategory, 
-  updateCategory, 
-  deleteCategory, 
-  type Category 
+import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+} from '@/components/ui/alert-dialog';
+import { ImpactProductsModal } from '@/components/ui/ImpactProductsModal';
+import {
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  getCategoryUnpublishImpact,
+  getCategoryUnpublishImpactProducts,
+  setCategoryPublishStatus,
+  type Category
 } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -42,9 +58,20 @@ const AdminCategoriesPage: React.FC = () => {
   const [formData, setFormData] = useState<Partial<Category>>({
     category_name: '',
     image: '',
+    hero_tagline: '',
+    hero_description: '',
   });
   const [imagePreview, setImagePreview] = useState<string>('');
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [heroImagePreview, setHeroImagePreview] = useState<string>('');
+  const [heroImageFile, setHeroImageFile] = useState<File | null>(null);
+
+  // Unpublish confirmation (cascades to this category's vendors, then their products)
+  const [unpublishTarget, setUnpublishTarget] = useState<Category | null>(null);
+  const [unpublishImpact, setUnpublishImpact] = useState<{ vendorCount: number; productCount: number } | null>(null);
+  const [isLoadingImpact, setIsLoadingImpact] = useState(false);
+  const [isTogglingId, setIsTogglingId] = useState<string | null>(null);
+  const [isImpactProductsOpen, setIsImpactProductsOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -85,6 +112,8 @@ const AdminCategoriesPage: React.FC = () => {
         setFormData(category);
         setImagePreview(category.image || '');
         setImageFile(null); // Reset file when loading from API
+        setHeroImagePreview(category.hero_image || '');
+        setHeroImageFile(null);
       } else if (!isLoading && categoryList.length > 0) {
         // Category not found
         toast.error('Category not found');
@@ -125,6 +154,38 @@ const AdminCategoriesPage: React.FC = () => {
     setFormData(prev => ({ ...prev, image: '' }));
   };
 
+  const handleHeroImageUpload = (file: File | null) => {
+    if (!file) return;
+
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+
+    if (!isImage && !isVideo) {
+      toast.error('Please upload an image or video file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setHeroImagePreview(reader.result as string);
+      setHeroImageFile(file);
+      setFormData(prev => ({ ...prev, hero_image: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleHeroImageUrlChange = (url: string) => {
+    setHeroImagePreview(url);
+    setHeroImageFile(null);
+    setFormData(prev => ({ ...prev, hero_image: url }));
+  };
+
+  const handleRemoveHeroImage = () => {
+    setHeroImagePreview('');
+    setHeroImageFile(null);
+    setFormData(prev => ({ ...prev, hero_image: '' }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -141,6 +202,9 @@ const AdminCategoriesPage: React.FC = () => {
         const response = await updateCategory(id, {
           category_name: formData.category_name!.trim(),
           image: imageFile || (imagePreview || undefined), // Use file if available, otherwise use URL
+          hero_image: heroImageFile || (heroImagePreview || undefined),
+          hero_tagline: formData.hero_tagline ?? '',
+          hero_description: formData.hero_description ?? '',
         });
 
         if (response.success && response.data) {
@@ -149,9 +213,11 @@ const AdminCategoriesPage: React.FC = () => {
           );
           toast.success(response.message || 'Category updated successfully');
           setIsFormOpen(false);
-          setFormData({ category_name: '', image: '' });
+          setFormData({ category_name: '', image: '', hero_tagline: '', hero_description: '' });
           setImagePreview('');
           setImageFile(null);
+          setHeroImagePreview('');
+          setHeroImageFile(null);
           navigate('/admin/categories');
         } else {
           toast.error(response.message || 'Failed to update category');
@@ -161,15 +227,20 @@ const AdminCategoriesPage: React.FC = () => {
         const response = await createCategory({
           category_name: formData.category_name!.trim(),
           image: imageFile || (imagePreview || undefined), // Use file if available, otherwise use URL
+          hero_image: heroImageFile || (heroImagePreview || undefined),
+          hero_tagline: formData.hero_tagline ?? '',
+          hero_description: formData.hero_description ?? '',
         });
 
         if (response.success && response.data) {
           setCategoryList(prev => [...prev, response.data!]);
           toast.success(response.message || 'Category created successfully');
           setIsFormOpen(false);
-          setFormData({ category_name: '', image: '' });
+          setFormData({ category_name: '', image: '', hero_tagline: '', hero_description: '' });
           setImagePreview('');
           setImageFile(null);
+          setHeroImagePreview('');
+          setHeroImageFile(null);
           navigate('/admin/categories');
         } else {
           toast.error(response.message || 'Failed to create category');
@@ -197,6 +268,46 @@ const AdminCategoriesPage: React.FC = () => {
     }
   };
 
+  const handleTogglePublish = async (category: Category) => {
+    if (category.is_published === false) {
+      // Re-publishing is non-destructive — no confirmation needed.
+      setIsTogglingId(category.id);
+      const response = await setCategoryPublishStatus(category.id, true);
+      if (response.success && response.data) {
+        setCategoryList(prev => prev.map(c => (c.id === category.id ? response.data!.category : c)));
+        toast.success(response.message || 'Category published');
+      } else {
+        toast.error(response.message || 'Failed to publish category');
+      }
+      setIsTogglingId(null);
+      return;
+    }
+
+    // Unpublishing cascades to this category's vendors, then their products — preview the impact first.
+    setUnpublishTarget(category);
+    setIsImpactProductsOpen(false);
+    setIsLoadingImpact(true);
+    const response = await getCategoryUnpublishImpact(category.id);
+    setUnpublishImpact(response.success && response.data ? response.data : { vendorCount: 0, productCount: 0 });
+    setIsLoadingImpact(false);
+  };
+
+  const handleConfirmUnpublish = async () => {
+    if (!unpublishTarget) return;
+
+    setIsTogglingId(unpublishTarget.id);
+    const response = await setCategoryPublishStatus(unpublishTarget.id, false);
+    if (response.success && response.data) {
+      setCategoryList(prev => prev.map(c => (c.id === unpublishTarget.id ? response.data!.category : c)));
+      toast.success(response.message || 'Category unpublished');
+    } else {
+      toast.error(response.message || 'Failed to unpublish category');
+    }
+    setIsTogglingId(null);
+    setUnpublishTarget(null);
+    setUnpublishImpact(null);
+  };
+
   const handleEdit = (category: Category) => {
     navigate(`/admin/categories/${category.id}`);
     setIsFormOpen(true);
@@ -208,9 +319,13 @@ const AdminCategoriesPage: React.FC = () => {
     setFormData({
       category_name: '',
       image: '',
+      hero_tagline: '',
+      hero_description: '',
     });
     setImagePreview('');
     setImageFile(null);
+    setHeroImagePreview('');
+    setHeroImageFile(null);
   };
 
   return (
@@ -335,18 +450,113 @@ const AdminCategoriesPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Category Hero Banner — shown on this category's product-listing
+                      page above the grid. Entirely optional; leave it empty to keep
+                      the plain heading. */}
+                  <div className="pt-6 border-t border-border">
+                    <h2 className="font-orbitron text-xl font-bold mb-4">CATEGORY HERO BANNER</h2>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Shown above the product grid when a customer browses this category. Leave blank to keep the default heading.
+                    </p>
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Hero Image</Label>
+                        <div className="mt-2">
+                          {heroImagePreview ? (
+                            <div className="relative aspect-[16/6] border-2 border-border rounded-lg overflow-hidden group">
+                              {heroImagePreview.match(/\.(mp4|webm|ogg)$/i) ? (
+                                <video
+                                  src={heroImagePreview}
+                                  className="w-full h-full object-cover"
+                                  controls={false}
+                                  muted
+                                />
+                              ) : (
+                                <img
+                                  src={heroImagePreview}
+                                  alt="Hero preview"
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                              <div className="absolute top-1 right-1">
+                                {heroImagePreview.match(/\.(mp4|webm|ogg)$/i) ? (
+                                  <Video className="w-4 h-4 text-primary" />
+                                ) : (
+                                  <ImageIcon className="w-4 h-4 text-primary" />
+                                )}
+                              </div>
+                              <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <motion.button
+                                  type="button"
+                                  onClick={handleRemoveHeroImage}
+                                  className="p-2 bg-destructive text-destructive-foreground rounded-lg"
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                >
+                                  <X className="w-4 h-4" />
+                                </motion.button>
+                              </div>
+                            </div>
+                          ) : (
+                            <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                              <Upload className="w-6 h-6 text-muted-foreground mb-2" />
+                              <span className="text-sm text-muted-foreground">Upload Hero Image/Video</span>
+                              <input
+                                type="file"
+                                accept="image/*,video/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleHeroImageUpload(file);
+                                }}
+                              />
+                            </label>
+                          )}
+                          <Input
+                            type="url"
+                            placeholder="Or enter hero image/video URL"
+                            value={heroImagePreview}
+                            onChange={(e) => handleHeroImageUrlChange(e.target.value)}
+                            className="mt-2"
+                          />
+                          {heroImageFile && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              File size: {(heroImageFile.size / (1024 * 1024)).toFixed(2)}MB
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="hero_tagline">Hero Tagline</Label>
+                        <Input
+                          id="hero_tagline"
+                          value={formData.hero_tagline || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, hero_tagline: e.target.value }))}
+                          placeholder="e.g., Built By Experts, Trusted By Gamers"
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="hero_description">Hero Description</Label>
+                        <Textarea
+                          id="hero_description"
+                          value={formData.hero_description || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, hero_description: e.target.value }))}
+                          placeholder="A sentence or two introducing this category to shoppers."
+                          rows={3}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Actions */}
                   <div className="flex gap-4 pt-4 border-t border-border">
                     <CyberButton type="submit" size="lg" disabled={isSubmitting}>
                       {isSubmitting ? (
-                        <span className="flex items-center gap-2">
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                            className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                          />
-                          SAVING...
-                        </span>
+                        <Loader size="sm" label="Saving..." />
                       ) : (
                         <span className="flex items-center gap-2">
                           <Save className="w-4 h-4" />
@@ -379,12 +589,7 @@ const AdminCategoriesPage: React.FC = () => {
             >
               {isLoading ? (
                 <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto"
-                  />
-                  <p className="text-muted-foreground mt-4">Loading categories...</p>
+                  <Loader label="Loading categories..." />
                 </NeonCard>
               ) : categoryList.length === 0 ? (
                 <NeonCard className="p-12 text-center" glowColor="cyan" hover={false}>
@@ -444,6 +649,14 @@ const AdminCategoriesPage: React.FC = () => {
                               </p>
                             </div>
                           </div>
+                          <span className={cn(
+                            "px-2 py-1 text-xs rounded whitespace-nowrap",
+                            category.is_published === false
+                              ? "bg-muted text-muted-foreground"
+                              : "bg-green-500/10 text-green-500"
+                          )}>
+                            {category.is_published === false ? 'Unpublished' : 'Published'}
+                          </span>
                         </div>
                         <div className="flex gap-2">
                           <CyberButton
@@ -455,6 +668,16 @@ const AdminCategoriesPage: React.FC = () => {
                             <Edit className="w-4 h-4 mr-2" />
                             EDIT
                           </CyberButton>
+                          <motion.button
+                            onClick={() => handleTogglePublish(category)}
+                            disabled={isTogglingId === category.id}
+                            className="p-2 rounded-lg border border-border text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            aria-label={category.is_published === false ? 'Publish category' : 'Unpublish category'}
+                          >
+                            {category.is_published === false ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                          </motion.button>
                           <motion.button
                             onClick={() => handleDelete(category.id)}
                             className="p-2 rounded-lg border border-destructive text-destructive hover:bg-destructive/10 transition-colors"
@@ -473,6 +696,75 @@ const AdminCategoriesPage: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
+
+      <AlertDialog open={!!unpublishTarget} onOpenChange={(open) => { if (!open) { setUnpublishTarget(null); setUnpublishImpact(null); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unpublish "{unpublishTarget?.category_name}"?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                {isLoadingImpact ? (
+                  <Loader size="sm" label="Checking impact..." />
+                ) : (
+                  <>
+                    This will unpublish{' '}
+                    <span className="font-semibold text-foreground">
+                      {unpublishImpact?.vendorCount ?? 0} vendor{(unpublishImpact?.vendorCount ?? 0) === 1 ? '' : 's'}
+                    </span>{' '}
+                    selling in this category, and{' '}
+                    <span className="font-semibold text-foreground">
+                      {unpublishImpact?.productCount ?? 0} product{(unpublishImpact?.productCount ?? 0) === 1 ? '' : 's'}
+                    </span>{' '}
+                    belonging to those vendors (across all categories, not just this one). None of it will be visible on the storefront until republished individually.
+                    {(unpublishImpact?.productCount ?? 0) > 0 && (
+                      <div className="mt-3">
+                        <CyberButton
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsImpactProductsOpen(true)}
+                        >
+                          Show Products
+                        </CyberButton>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <CyberButton
+              type="button"
+              variant="outline"
+              onClick={() => { setUnpublishTarget(null); setUnpublishImpact(null); }}
+              disabled={isTogglingId === unpublishTarget?.id}
+            >
+              Cancel
+            </CyberButton>
+            <CyberButton
+              type="button"
+              onClick={handleConfirmUnpublish}
+              disabled={isLoadingImpact || isTogglingId === unpublishTarget?.id}
+            >
+              {isTogglingId === unpublishTarget?.id ? (
+                <Loader size="sm" label="Unpublishing..." />
+              ) : (
+                'Unpublish Category'
+              )}
+            </CyberButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {unpublishTarget && (
+        <ImpactProductsModal
+          open={isImpactProductsOpen}
+          onOpenChange={setIsImpactProductsOpen}
+          title={`Products to be unpublished — ${unpublishTarget.category_name}`}
+          fetchPage={({ limit, offset }) => getCategoryUnpublishImpactProducts(unpublishTarget.id, { limit, offset })}
+        />
+      )}
     </AdminLayout>
   );
 };

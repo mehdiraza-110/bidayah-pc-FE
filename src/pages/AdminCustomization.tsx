@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { CyberButton } from '@/components/ui/CyberButton';
+import { Loader } from '@/components/ui/Loader';
 import { NeonCard } from '@/components/ui/NeonCard';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -327,11 +328,7 @@ const AdminCustomizationPage: React.FC = () => {
         <NeonCard className="p-8 mb-8" glowColor="purple" hover={false}>
           {isContentLoading ? (
             <div className="flex items-center justify-center py-16">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full"
-              />
+              <Loader />
             </div>
           ) : (
           <form onSubmit={handleContentSubmit} className="space-y-6">
@@ -457,14 +454,7 @@ const AdminCustomizationPage: React.FC = () => {
             <div className="flex gap-4 pt-4 border-t border-border">
               <CyberButton type="submit" size="lg" disabled={isContentSubmitting}>
                 {isContentSubmitting ? (
-                  <span className="flex items-center gap-2">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                    />
-                    SAVING...
-                  </span>
+                  <Loader size="sm" label="Saving..." />
                 ) : (
                   <span className="flex items-center gap-2">
                     <Save className="w-4 h-4" />
@@ -480,11 +470,7 @@ const AdminCustomizationPage: React.FC = () => {
         <NeonCard className="p-8" glowColor="cyan" hover={false}>
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full"
-              />
+              <Loader />
             </div>
           ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -622,14 +608,7 @@ const AdminCustomizationPage: React.FC = () => {
             <div className="flex gap-4 pt-4 border-t border-border">
               <CyberButton type="submit" size="lg" disabled={isSubmitting}>
                 {isSubmitting ? (
-                  <span className="flex items-center gap-2">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                    />
-                    SAVING...
-                  </span>
+                  <Loader size="sm" label="Saving..." />
                 ) : (
                   <span className="flex items-center gap-2">
                     <Save className="w-4 h-4" />

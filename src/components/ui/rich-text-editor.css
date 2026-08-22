@@ -1,60 +1,116 @@
-.rich-text-editor .jodit-container,
-.rich-text-editor .jodit-workplace,
-.rich-text-editor .jodit-wysiwyg {
-  background: hsl(var(--background));
+/* Theme react-quill to match the admin's dark UI. Scoped under .rich-text-editor
+   so it never leaks into the public blog content it eventually renders. */
+.rich-text-editor .ql-toolbar.ql-snow {
+  border-color: hsl(var(--border));
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+  background: hsl(var(--muted) / 0.4);
+}
+
+.rich-text-editor .ql-container.ql-snow {
+  border-color: hsl(var(--border));
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  min-height: 260px;
+}
+
+.rich-text-editor .ql-editor {
+  min-height: 260px;
   color: hsl(var(--foreground));
 }
 
-.rich-text-editor .jodit-container {
-  border: 0;
-  font-family: 'Rajdhani', sans-serif;
+.rich-text-editor .ql-editor.ql-blank::before {
+  color: hsl(var(--muted-foreground));
+  font-style: normal;
 }
 
-.rich-text-editor .jodit-toolbar__box,
-.rich-text-editor .jodit-status-bar {
-  background: hsl(var(--muted) / 0.45);
+.rich-text-editor .ql-snow .ql-stroke {
+  stroke: hsl(var(--muted-foreground));
+}
+
+.rich-text-editor .ql-snow .ql-fill {
+  fill: hsl(var(--muted-foreground));
+}
+
+.rich-text-editor .ql-snow .ql-picker {
+  color: hsl(var(--muted-foreground));
+}
+
+.rich-text-editor .ql-toolbar.ql-snow .ql-formats button:hover .ql-stroke,
+.rich-text-editor .ql-toolbar.ql-snow .ql-formats button.ql-active .ql-stroke {
+  stroke: hsl(var(--primary));
+}
+
+.rich-text-editor .ql-toolbar.ql-snow .ql-formats button:hover .ql-fill,
+.rich-text-editor .ql-toolbar.ql-snow .ql-formats button.ql-active .ql-fill {
+  fill: hsl(var(--primary));
+}
+
+.rich-text-editor .ql-snow .ql-picker-options {
+  background: hsl(var(--card));
   border-color: hsl(var(--border));
 }
 
-.rich-text-editor .jodit-wysiwyg {
-  font-size: 1rem;
-  line-height: 1.6;
+.rich-text-editor .ql-snow .ql-tooltip {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+  box-shadow: none;
 }
 
-.rich-text-editor .jodit-wysiwyg p,
-.rich-text-editor .jodit-wysiwyg div,
-.rich-text-editor .jodit-wysiwyg span,
-.rich-text-editor .jodit-wysiwyg li {
-  color: inherit;
+.rich-text-editor .ql-snow .ql-tooltip input[type="text"] {
+  background: hsl(var(--background));
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
 }
 
-.rich-text-editor .jodit-wysiwyg ul,
-.rich-text-editor .jodit-wysiwyg ol {
-  margin: 0.75rem 0 0.75rem 1.5rem;
-  padding-left: 1.25rem;
+/* Rendered blog content on the public detail page reuses these rules
+   (imported once via RichTextEditor) so headings/lists/quotes look
+   intentional instead of browser-default. */
+.blog-content h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 1.75rem 0 0.75rem;
 }
 
-.rich-text-editor .jodit-wysiwyg ul {
-  list-style: disc outside;
+.blog-content h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.5rem;
 }
 
-.rich-text-editor .jodit-wysiwyg ol {
-  list-style: decimal outside;
+.blog-content p {
+  margin: 0.75rem 0;
+  line-height: 1.75;
 }
 
-.rich-text-editor .jodit-wysiwyg li {
-  display: list-item;
-  padding-left: 0.25rem;
+.blog-content ul,
+.blog-content ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
 }
 
-.rich-text-editor .jodit-wysiwyg li::marker {
-  color: currentColor;
+.blog-content li {
+  margin: 0.25rem 0;
 }
 
-.rich-text-editor .jodit-wysiwyg a {
-  color: hsl(var(--primary));
-}
-
-.rich-text-editor .jodit-placeholder {
+.blog-content blockquote {
+  border-left: 3px solid hsl(var(--primary));
+  padding-left: 1rem;
+  margin: 1.25rem 0;
   color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.blog-content img {
+  border-radius: 0.5rem;
+  margin: 1.25rem 0;
+  max-width: 100%;
+}
+
+.blog-content a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
 }

@@ -12,6 +12,8 @@ import ProductDetail from "./pages/ProductDetail";
 import PCBuilder from "./pages/PCBuilder";
 import Checkout from "./pages/Checkout";
 import ThankYou from "./pages/ThankYou";
+import Wishlist from "./pages/Wishlist";
+import Compare from "./pages/Compare";
 import AdminLogin from "./pages/AdminLogin";
 import AdminSignup from "./pages/AdminSignup";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -28,7 +30,12 @@ import AdminBilling from "./pages/AdminBilling";
 import AdminFilterRules from "./pages/AdminFilterRules";
 import AdminPCBuilderCategories from "./pages/AdminPCBuilderCategories";
 import AdminBuilderRules from "./pages/AdminBuilderRules";
+import AdminStoreLocations from "./pages/AdminStoreLocations";
+import AdminBlogs from "./pages/AdminBlogs";
+import Blog from "./pages/Blog";
+import BlogDetail from "./pages/BlogDetail";
 import NotFound from "./pages/NotFound";
+import { WhatsAppWidget } from "@/components/layout/WhatsAppWidget";
 
 const queryClient = new QueryClient();
 
@@ -50,12 +57,18 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <ScrollToTop />
+          <WhatsAppWidget />
           <AnimatePresence mode="wait">
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/products" element={<Products />} />
               <Route path="/product/:id" element={<ProductDetail />} />
+              <Route path="/product/:id/:slug" element={<ProductDetail />} />
               <Route path="/pc-builder" element={<PCBuilder />} />
+              <Route path="/blog" element={<Blog />} />
+              <Route path="/blog/:slug" element={<BlogDetail />} />
+              <Route path="/wishlist" element={<Wishlist />} />
+              <Route path="/compare" element={<Compare />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/thank-you" element={<ThankYou />} />
               <Route path="/admin/login" element={<AdminLogin />} />
@@ -78,6 +91,10 @@ const App = () => (
               <Route path="/admin/billing" element={<AdminBilling />} />
               <Route path="/admin/analytics" element={<AdminAnalytics />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
+              <Route path="/admin/store-locations" element={<AdminStoreLocations />} />
+              <Route path="/admin/store-locations/:id" element={<AdminStoreLocations />} />
+              <Route path="/admin/blogs" element={<AdminBlogs />} />
+              <Route path="/admin/blogs/:id" element={<AdminBlogs />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AnimatePresence>

@@ -14,6 +14,7 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   pagination?: Pagination | null;
+  has_more?: boolean;
 }
 
 export interface LoginRequest {
@@ -67,8 +68,22 @@ export interface UpdateProfileRequest {
 export interface Vendor {
   id: string;
   vendor_name: string;
+  is_published?: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface UnpublishImpact {
+  productCount: number;
+}
+
+// A single row in the "Show Products" preview modal for an impending unpublish cascade.
+export interface UnpublishImpactProduct {
+  id: string;
+  name: string;
+  price: number;
+  category_name?: string;
+  vendor_name?: string;
 }
 
 export interface CreateVendorRequest {
@@ -79,23 +94,140 @@ export interface UpdateVendorRequest {
   vendor_name: string;
 }
 
+// Site settings (singleton)
+export interface SiteSettings {
+  id?: string;
+  whatsapp_number?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface UpdateSiteSettingsRequest {
+  whatsapp_number?: string;
+}
+
+// Store location interfaces
+export interface StoreLocation {
+  id: string;
+  name: string;
+  address: string;
+  city?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateStoreLocationRequest {
+  name: string;
+  address: string;
+  city?: string;
+  is_active?: boolean;
+}
+
+export interface UpdateStoreLocationRequest {
+  name?: string;
+  address?: string;
+  city?: string;
+  is_active?: boolean;
+}
+
 // Category interfaces
 export interface Category {
   id: string;
   category_name: string;
   image?: string;
+  is_published?: boolean;
+  // Product-listing-page hero banner — all optional, all admin-editable.
+  hero_image?: string;
+  hero_tagline?: string;
+  hero_description?: string;
+  // Only populated on PC builder options — how many of this category's
+  // products a customer may add to a single build (default 1).
+  max_quantity?: number;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface CategoryUnpublishImpact {
+  vendorCount: number;
+  productCount: number;
+}
+
+// One category-scoped "Specifications" filter group for the product-listing
+// page — a feature key plus the distinct values actually used by its
+// published products. Part of CategoryFilters, returned by getCategoryFilters().
+export interface CategoryFilterGroup {
+  id: string;
+  feature_key: string;
+  display_order: number;
+  values: string[];
+}
+
+// Everything needed to render the product-listing page's filter sidebar for one
+// category: its "Specifications" groups, and the vendors that actually sell in it
+// (never a vendor with zero products in this category, e.g. no GPU brands under Ram).
+export interface CategoryFilters {
+  key_features: CategoryFilterGroup[];
+  vendors: Vendor[];
 }
 
 export interface CreateCategoryRequest {
   category_name: string;
   image?: File | string;
+  hero_image?: File | string;
+  hero_tagline?: string;
+  hero_description?: string;
 }
 
 export interface UpdateCategoryRequest {
   category_name?: string;
   image?: File | string;
+  hero_image?: File | string;
+  hero_tagline?: string;
+  hero_description?: string;
+}
+
+// Blog interfaces
+export interface Blog {
+  id: string;
+  title: string;
+  slug?: string;
+  category?: string; // Free-text tag, e.g. "Buying Guide" — not tied to product categories
+  excerpt?: string;
+  content: string; // Rich-text HTML
+  featured_image?: string;
+  status: 'published' | 'draft';
+  featured?: boolean;
+  // SEO — fully admin-controlled, independent of the post's own title/excerpt/image
+  seo_title?: string;
+  seo_description?: string;
+  seo_keywords?: string;
+  og_image?: string;
+  published_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateBlogRequest {
+  title: string;
+  content: string;
+  category?: string;
+  excerpt?: string;
+  featured_image?: File | string;
+  status?: 'published' | 'draft';
+  featured?: boolean;
+  seo_title?: string;
+  seo_description?: string;
+  seo_keywords?: string;
+  og_image?: File | string;
+}
+
+export type UpdateBlogRequest = Partial<CreateBlogRequest>;
+
+export interface BlogFilters {
+  status?: 'published' | 'draft';
+  featured?: boolean;
+  limit?: number;
 }
 
 // Billing Information interfaces
@@ -191,6 +323,7 @@ export interface KeyFeatureFilters {
 export interface Product {
   id: string;
   name: string;
+  slug?: string; // Server-generated, unique — used to build clean /product/<category>/<slug> URLs
   category_id?: string;
   category_name?: string; // Populated from join
   price: number;
@@ -199,8 +332,9 @@ export interface Product {
   description?: string;
   stock: number;
   in_stock: boolean;
-  vendor_id?: string;
-  vendor_name?: string; // Populated from join
+  vendor_id?: string; // Legacy flat field — not actually sent by the API, kept for back-compat
+  vendor_name?: string; // Legacy flat field — not actually sent by the API, kept for back-compat
+  vendors?: { id: string; vendor_name: string }[]; // Actual shape returned by the API
   status: 'published' | 'draft';
   featured?: boolean;
   new_product?: boolean; // API uses new_product instead of new
@@ -305,17 +439,22 @@ export interface PCBuilderCategoryConfig {
   image?: string | null;
   display_order: number;
   is_active: boolean;
+  max_quantity: number;
 }
 
 export interface PCBuilderCategoryConfigItem {
   category_id: string;
   display_order: number;
   is_active: boolean;
+  max_quantity: number;
 }
 
 export interface PCBuilderOptions {
   categories: Category[];
   vendors: Vendor[];
+  // Categories that actually drive a compatibility rule elsewhere (e.g. CPU
+  // narrowing Motherboard by socket/vendor) — see AdminBuilderRules.
+  trigger_category_ids?: string[];
 }
 
 export interface PCBuilderCategoryVendorAssociation {
@@ -333,6 +472,10 @@ export interface PCBuilderCategoryVendorConfig {
 export interface PCBuilderPriorSelection {
   category_id: string;
   vendor_id: string;
+  // The actual product chosen for that category, if any — lets the backend match on the
+  // product's own spec values (Socket Type, Memory Type, Recommended PSU, etc.) instead of
+  // only its vendor.
+  product_id?: string;
 }
 
 export interface PublicPCBuilderProductFilters {
@@ -343,6 +486,9 @@ export interface PublicPCBuilderProductFilters {
   result_category_id?: string;
   in_stock?: boolean;
   prior_selections?: PCBuilderPriorSelection[];
+  search?: string;
+  limit?: number;
+  offset?: number;
 }
 
 // Get JWT token from localStorage
@@ -402,6 +548,8 @@ async function apiRequest<T>(
       success: true,
       message: data.message || 'Success',
       data: data.data,
+      pagination: data.pagination,
+      has_more: data.has_more,
     };
   } catch (error) {
     return {
@@ -496,9 +644,93 @@ export const updateVendor = async (id: string, vendorData: UpdateVendorRequest):
   });
 };
 
+// Preview how many currently-published products would be unpublished if this vendor were unpublished
+export const getVendorUnpublishImpact = async (id: string): Promise<ApiResponse<UnpublishImpact>> => {
+  return apiRequest<UnpublishImpact>(`/vendors/${id}/unpublish-impact`, {
+    method: 'GET',
+  });
+};
+
+// Paginated preview of the actual products that would be unpublished for this vendor
+export const getVendorUnpublishImpactProducts = async (
+  id: string,
+  { limit = 7, offset = 0 }: { limit?: number; offset?: number } = {}
+): Promise<ApiResponse<UnpublishImpactProduct[]>> => {
+  return apiRequest<UnpublishImpactProduct[]>(`/vendors/${id}/unpublish-impact/products?limit=${limit}&offset=${offset}`, {
+    method: 'GET',
+  });
+};
+
+// Publish/unpublish a vendor (unpublishing cascades to its products)
+export const setVendorPublishStatus = async (
+  id: string,
+  isPublished: boolean
+): Promise<ApiResponse<{ vendor: Vendor; unpublishedProductCount: number }>> => {
+  return apiRequest<{ vendor: Vendor; unpublishedProductCount: number }>(`/vendors/${id}/publish-status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_published: isPublished }),
+  });
+};
+
 // Delete vendor
 export const deleteVendor = async (id: string): Promise<ApiResponse<Vendor>> => {
   return apiRequest<Vendor>(`/vendors/${id}`, {
+    method: 'DELETE',
+  });
+};
+
+// Site settings APIs
+
+// Get site settings
+export const getSiteSettings = async (): Promise<ApiResponse<SiteSettings>> => {
+  return apiRequest<SiteSettings>('/site-settings', {
+    method: 'GET',
+  });
+};
+
+// Update site settings
+export const updateSiteSettings = async (settingsData: UpdateSiteSettingsRequest): Promise<ApiResponse<SiteSettings>> => {
+  return apiRequest<SiteSettings>('/site-settings', {
+    method: 'PUT',
+    body: JSON.stringify(settingsData),
+  });
+};
+
+// Store location APIs
+
+// Get all store locations
+export const getStoreLocations = async (): Promise<ApiResponse<StoreLocation[]>> => {
+  return apiRequest<StoreLocation[]>('/store-locations', {
+    method: 'GET',
+  });
+};
+
+// Get store location by ID
+export const getStoreLocationById = async (id: string): Promise<ApiResponse<StoreLocation>> => {
+  return apiRequest<StoreLocation>(`/store-locations/${id}`, {
+    method: 'GET',
+  });
+};
+
+// Create store location
+export const createStoreLocation = async (locationData: CreateStoreLocationRequest): Promise<ApiResponse<StoreLocation>> => {
+  return apiRequest<StoreLocation>('/store-locations', {
+    method: 'POST',
+    body: JSON.stringify(locationData),
+  });
+};
+
+// Update store location
+export const updateStoreLocation = async (id: string, locationData: UpdateStoreLocationRequest): Promise<ApiResponse<StoreLocation>> => {
+  return apiRequest<StoreLocation>(`/store-locations/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(locationData),
+  });
+};
+
+// Delete store location
+export const deleteStoreLocation = async (id: string): Promise<ApiResponse<StoreLocation>> => {
+  return apiRequest<StoreLocation>(`/store-locations/${id}`, {
     method: 'DELETE',
   });
 };
@@ -521,11 +753,31 @@ export const getCategoryById = async (id: string): Promise<ApiResponse<Category>
 
 // Create category
 export const createCategory = async (categoryData: CreateCategoryRequest): Promise<ApiResponse<Category>> => {
-  // Check if image is a File (for upload) or string/undefined (for URL or no image)
-  if (categoryData.image instanceof File) {
+  // Either image field can be a File (upload) or a string/undefined (URL or
+  // unset). If either one is a File, the whole request has to go as
+  // multipart — the other field's string value (if any) still rides along
+  // as a plain form field.
+  const hasFile = categoryData.image instanceof File || categoryData.hero_image instanceof File;
+
+  if (hasFile) {
     const formData = new FormData();
     formData.append('category_name', categoryData.category_name);
-    formData.append('image', categoryData.image);
+    if (categoryData.image instanceof File) {
+      formData.append('image', categoryData.image);
+    } else if (typeof categoryData.image === 'string') {
+      formData.append('image', categoryData.image);
+    }
+    if (categoryData.hero_image instanceof File) {
+      formData.append('hero_image', categoryData.hero_image);
+    } else if (typeof categoryData.hero_image === 'string') {
+      formData.append('hero_image', categoryData.hero_image);
+    }
+    if (categoryData.hero_tagline !== undefined) {
+      formData.append('hero_tagline', categoryData.hero_tagline);
+    }
+    if (categoryData.hero_description !== undefined) {
+      formData.append('hero_description', categoryData.hero_description);
+    }
 
     return apiRequest<Category>(
       '/categories',
@@ -536,13 +788,14 @@ export const createCategory = async (categoryData: CreateCategoryRequest): Promi
       true // Skip JSON Content-Type for multipart/form-data
     );
   } else {
-    // No image or image is a URL - send as JSON
-    const body: { category_name: string; image?: string } = {
+    // No files - send as JSON
+    const body: { category_name: string; image?: string; hero_image?: string; hero_tagline?: string; hero_description?: string } = {
       category_name: categoryData.category_name,
     };
-    if (categoryData.image && typeof categoryData.image === 'string') {
-      body.image = categoryData.image;
-    }
+    if (typeof categoryData.image === 'string') body.image = categoryData.image;
+    if (typeof categoryData.hero_image === 'string') body.hero_image = categoryData.hero_image;
+    if (categoryData.hero_tagline !== undefined) body.hero_tagline = categoryData.hero_tagline;
+    if (categoryData.hero_description !== undefined) body.hero_description = categoryData.hero_description;
 
     return apiRequest<Category>('/categories', {
       method: 'POST',
@@ -553,13 +806,29 @@ export const createCategory = async (categoryData: CreateCategoryRequest): Promi
 
 // Update category
 export const updateCategory = async (id: string, categoryData: UpdateCategoryRequest): Promise<ApiResponse<Category>> => {
-  // Check if image is a File (for upload)
-  if (categoryData.image instanceof File) {
+  const hasFile = categoryData.image instanceof File || categoryData.hero_image instanceof File;
+
+  if (hasFile) {
     const formData = new FormData();
     if (categoryData.category_name) {
       formData.append('category_name', categoryData.category_name);
     }
-    formData.append('image', categoryData.image);
+    if (categoryData.image instanceof File) {
+      formData.append('image', categoryData.image);
+    } else if (typeof categoryData.image === 'string') {
+      formData.append('image', categoryData.image);
+    }
+    if (categoryData.hero_image instanceof File) {
+      formData.append('hero_image', categoryData.hero_image);
+    } else if (typeof categoryData.hero_image === 'string') {
+      formData.append('hero_image', categoryData.hero_image);
+    }
+    if (categoryData.hero_tagline !== undefined) {
+      formData.append('hero_tagline', categoryData.hero_tagline);
+    }
+    if (categoryData.hero_description !== undefined) {
+      formData.append('hero_description', categoryData.hero_description);
+    }
 
     return apiRequest<Category>(
       `/categories/${id}`,
@@ -570,14 +839,13 @@ export const updateCategory = async (id: string, categoryData: UpdateCategoryReq
       true // Skip JSON Content-Type for multipart/form-data
     );
   } else {
-    // No image file - send as JSON
-    const body: { category_name?: string; image?: string } = {};
-    if (categoryData.category_name) {
-      body.category_name = categoryData.category_name;
-    }
-    if (categoryData.image && typeof categoryData.image === 'string') {
-      body.image = categoryData.image;
-    }
+    // No files - send as JSON
+    const body: { category_name?: string; image?: string; hero_image?: string; hero_tagline?: string; hero_description?: string } = {};
+    if (categoryData.category_name) body.category_name = categoryData.category_name;
+    if (typeof categoryData.image === 'string') body.image = categoryData.image;
+    if (typeof categoryData.hero_image === 'string') body.hero_image = categoryData.hero_image;
+    if (categoryData.hero_tagline !== undefined) body.hero_tagline = categoryData.hero_tagline;
+    if (categoryData.hero_description !== undefined) body.hero_description = categoryData.hero_description;
 
     return apiRequest<Category>(`/categories/${id}`, {
       method: 'PUT',
@@ -586,9 +854,165 @@ export const updateCategory = async (id: string, categoryData: UpdateCategoryReq
   }
 };
 
+// Dynamic filters for a category's product-listing page: "Specifications" groups
+// plus the vendors that actually sell in this category. Pass vendorId to narrow the
+// Specifications values to what that vendor's products actually have (e.g. selecting
+// AMD under CPU stops offering "Intel" or LGA1700/LGA1851 as options).
+export const getCategoryFilters = async (categoryId: string, vendorId?: string): Promise<ApiResponse<CategoryFilters>> => {
+  const query = vendorId ? `?vendor_id=${encodeURIComponent(vendorId)}` : '';
+  return publicApiRequest<CategoryFilters>(`/categories/${categoryId}/filters${query}`, {
+    method: 'GET',
+  });
+};
+
+// Preview how many currently-published vendors (and their products) would be unpublished if this category were unpublished
+export const getCategoryUnpublishImpact = async (id: string): Promise<ApiResponse<CategoryUnpublishImpact>> => {
+  return apiRequest<CategoryUnpublishImpact>(`/categories/${id}/unpublish-impact`, {
+    method: 'GET',
+  });
+};
+
+// Paginated preview of the actual products that would be unpublished for this category
+export const getCategoryUnpublishImpactProducts = async (
+  id: string,
+  { limit = 7, offset = 0 }: { limit?: number; offset?: number } = {}
+): Promise<ApiResponse<UnpublishImpactProduct[]>> => {
+  return apiRequest<UnpublishImpactProduct[]>(`/categories/${id}/unpublish-impact/products?limit=${limit}&offset=${offset}`, {
+    method: 'GET',
+  });
+};
+
+// Publish/unpublish a category (unpublishing cascades to its vendors, then their products)
+export const setCategoryPublishStatus = async (
+  id: string,
+  isPublished: boolean
+): Promise<ApiResponse<{ category: Category; unpublishedVendorCount: number; unpublishedProductCount: number }>> => {
+  return apiRequest<{ category: Category; unpublishedVendorCount: number; unpublishedProductCount: number }>(
+    `/categories/${id}/publish-status`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ is_published: isPublished }),
+    }
+  );
+};
+
 // Delete category
 export const deleteCategory = async (id: string): Promise<ApiResponse<Category>> => {
   return apiRequest<Category>(`/categories/${id}`, {
+    method: 'DELETE',
+  });
+};
+
+// Blog APIs
+
+const buildBlogQuery = (filters?: BlogFilters): string => {
+  const params = new URLSearchParams();
+  if (filters?.status) params.append('status', filters.status);
+  if (filters?.featured !== undefined) params.append('featured', String(filters.featured));
+  if (filters?.limit !== undefined) params.append('limit', String(filters.limit));
+
+  const queryString = params.toString();
+  return queryString ? `?${queryString}` : '';
+};
+
+export const getBlogs = async (filters?: BlogFilters): Promise<ApiResponse<Blog[]>> => {
+  return apiRequest<Blog[]>(`/blogs${buildBlogQuery(filters)}`, {
+    method: 'GET',
+  });
+};
+
+export const getBlogById = async (id: string): Promise<ApiResponse<Blog>> => {
+  return apiRequest<Blog>(`/blogs/${id}`, {
+    method: 'GET',
+  });
+};
+
+// Either image field can be a File (upload) or a string/undefined (URL or
+// unset) — same "either type" contract used by categories/products.
+const appendBlogFormData = (formData: FormData, blogData: CreateBlogRequest | UpdateBlogRequest) => {
+  if (blogData.title !== undefined) formData.append('title', blogData.title);
+  if (blogData.content !== undefined) formData.append('content', blogData.content);
+  if (blogData.category !== undefined) formData.append('category', blogData.category || '');
+  if (blogData.excerpt !== undefined) formData.append('excerpt', blogData.excerpt || '');
+  if (blogData.status !== undefined) formData.append('status', blogData.status);
+  if (blogData.featured !== undefined) formData.append('featured', String(blogData.featured));
+  if (blogData.seo_title !== undefined) formData.append('seo_title', blogData.seo_title || '');
+  if (blogData.seo_description !== undefined) formData.append('seo_description', blogData.seo_description || '');
+  if (blogData.seo_keywords !== undefined) formData.append('seo_keywords', blogData.seo_keywords || '');
+
+  if (blogData.featured_image instanceof File) {
+    formData.append('featured_image', blogData.featured_image);
+  } else if (typeof blogData.featured_image === 'string') {
+    formData.append('featured_image', blogData.featured_image);
+  }
+  if (blogData.og_image instanceof File) {
+    formData.append('og_image', blogData.og_image);
+  } else if (typeof blogData.og_image === 'string') {
+    formData.append('og_image', blogData.og_image);
+  }
+};
+
+export const createBlog = async (blogData: CreateBlogRequest): Promise<ApiResponse<Blog>> => {
+  const hasFile = blogData.featured_image instanceof File || blogData.og_image instanceof File;
+
+  if (hasFile) {
+    const formData = new FormData();
+    appendBlogFormData(formData, blogData);
+
+    return apiRequest<Blog>('/blogs', { method: 'POST', body: formData }, true);
+  }
+
+  const body: Record<string, unknown> = {
+    title: blogData.title,
+    content: blogData.content,
+  };
+  if (blogData.category !== undefined) body.category = blogData.category;
+  if (blogData.excerpt !== undefined) body.excerpt = blogData.excerpt;
+  if (blogData.status !== undefined) body.status = blogData.status;
+  if (blogData.featured !== undefined) body.featured = blogData.featured;
+  if (blogData.seo_title !== undefined) body.seo_title = blogData.seo_title;
+  if (blogData.seo_description !== undefined) body.seo_description = blogData.seo_description;
+  if (blogData.seo_keywords !== undefined) body.seo_keywords = blogData.seo_keywords;
+  if (typeof blogData.featured_image === 'string') body.featured_image = blogData.featured_image;
+  if (typeof blogData.og_image === 'string') body.og_image = blogData.og_image;
+
+  return apiRequest<Blog>('/blogs', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+};
+
+export const updateBlog = async (id: string, blogData: UpdateBlogRequest): Promise<ApiResponse<Blog>> => {
+  const hasFile = blogData.featured_image instanceof File || blogData.og_image instanceof File;
+
+  if (hasFile) {
+    const formData = new FormData();
+    appendBlogFormData(formData, blogData);
+
+    return apiRequest<Blog>(`/blogs/${id}`, { method: 'PUT', body: formData }, true);
+  }
+
+  const body: Record<string, unknown> = {};
+  if (blogData.title !== undefined) body.title = blogData.title;
+  if (blogData.content !== undefined) body.content = blogData.content;
+  if (blogData.category !== undefined) body.category = blogData.category;
+  if (blogData.excerpt !== undefined) body.excerpt = blogData.excerpt;
+  if (blogData.status !== undefined) body.status = blogData.status;
+  if (blogData.featured !== undefined) body.featured = blogData.featured;
+  if (blogData.seo_title !== undefined) body.seo_title = blogData.seo_title;
+  if (blogData.seo_description !== undefined) body.seo_description = blogData.seo_description;
+  if (blogData.seo_keywords !== undefined) body.seo_keywords = blogData.seo_keywords;
+  if (typeof blogData.featured_image === 'string') body.featured_image = blogData.featured_image;
+  if (typeof blogData.og_image === 'string') body.og_image = blogData.og_image;
+
+  return apiRequest<Blog>(`/blogs/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+};
+
+export const deleteBlog = async (id: string): Promise<ApiResponse<Blog>> => {
+  return apiRequest<Blog>(`/blogs/${id}`, {
     method: 'DELETE',
   });
 };
@@ -793,6 +1217,22 @@ export const deleteProduct = async (id: string): Promise<ApiResponse<Product>> =
   });
 };
 
+// Bulk delete products
+export interface BulkDeleteProductsResult {
+  deletedIds: string[];
+  deletedCount: number;
+  notFound: string[];
+}
+
+export const bulkDeleteProducts = async (
+  ids: string[]
+): Promise<ApiResponse<BulkDeleteProductsResult>> => {
+  return apiRequest<BulkDeleteProductsResult>('/products/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+};
+
 // PC Builder Filter Rule APIs
 const buildFilterRuleQuery = (
   filters?: PCBuilderFilterRuleFilters | PreviewPCBuilderFilterRuleFilters
@@ -950,6 +1390,7 @@ async function publicApiRequest<T>(
       message: data.message || 'Success',
       data: data.data,
       pagination: data.pagination,
+      has_more: data.has_more,
     };
   } catch (error) {
     return {
@@ -961,6 +1402,12 @@ async function publicApiRequest<T>(
 }
 
 // Public Product APIs
+// One selected "Specifications" filter group, e.g. { id: '<category_key_feature_id>', values: ['16GB', '32GB'] }
+export interface KeyFeatureFilterSelection {
+  id: string;
+  values: string[];
+}
+
 export const getPublicProducts = async (filters?: {
   category_id?: string;
   vendor_id?: string;
@@ -970,6 +1417,7 @@ export const getPublicProducts = async (filters?: {
   sort?: 'featured' | 'newest' | 'price-low' | 'price-high' | 'rating';
   page?: number;
   limit?: number;
+  key_features?: KeyFeatureFilterSelection[];
 }): Promise<ApiResponse<Product[]>> => {
   const params = new URLSearchParams();
   if (filters?.category_id) params.append('category_id', filters.category_id);
@@ -980,6 +1428,9 @@ export const getPublicProducts = async (filters?: {
   if (filters?.sort) params.append('sort', filters.sort);
   if (filters?.page !== undefined) params.append('page', String(filters.page));
   if (filters?.limit !== undefined) params.append('limit', String(filters.limit));
+  if (filters?.key_features && filters.key_features.length > 0) {
+    params.append('key_features', JSON.stringify(filters.key_features));
+  }
 
   const queryString = params.toString();
   const endpoint = queryString ? `/products?${queryString}` : '/products';
@@ -1001,6 +1452,12 @@ export const getPublicProductById = async (id: string): Promise<ApiResponse<Prod
   });
 };
 
+export const getPublicProductBySlug = async (slug: string): Promise<ApiResponse<Product>> => {
+  return publicApiRequest<Product>(`/products/slug/${slug}`, {
+    method: 'GET',
+  });
+};
+
 // Public Vendor APIs
 export const getPublicVendors = async (): Promise<ApiResponse<Vendor[]>> => {
   return publicApiRequest<Vendor[]>('/vendors', {
@@ -1014,6 +1471,20 @@ export const getPublicVendorById = async (id: string): Promise<ApiResponse<Vendo
   });
 };
 
+// Public Site Settings API
+export const getPublicSiteSettings = async (): Promise<ApiResponse<SiteSettings>> => {
+  return publicApiRequest<SiteSettings>('/site-settings', {
+    method: 'GET',
+  });
+};
+
+// Public Store Locations API (active locations only)
+export const getPublicStoreLocations = async (): Promise<ApiResponse<StoreLocation[]>> => {
+  return publicApiRequest<StoreLocation[]>('/store-locations', {
+    method: 'GET',
+  });
+};
+
 // Public Category APIs
 export const getPublicCategories = async (): Promise<ApiResponse<Category[]>> => {
   return publicApiRequest<Category[]>('/categories', {
@@ -1023,6 +1494,28 @@ export const getPublicCategories = async (): Promise<ApiResponse<Category[]>> =>
 
 export const getPublicCategoryById = async (id: string): Promise<ApiResponse<Category>> => {
   return publicApiRequest<Category>(`/categories/${id}`, {
+    method: 'GET',
+  });
+};
+
+// Public Blog APIs (published posts only — enforced server-side)
+export const getPublicBlogs = async (filters?: Pick<BlogFilters, 'featured' | 'limit'>): Promise<ApiResponse<Blog[]>> => {
+  const params = new URLSearchParams();
+  if (filters?.featured !== undefined) params.append('featured', String(filters.featured));
+  if (filters?.limit !== undefined) params.append('limit', String(filters.limit));
+  const queryString = params.toString();
+
+  return publicApiRequest<Blog[]>(`/blogs${queryString ? `?${queryString}` : ''}`, {
+    method: 'GET',
+  });
+};
+
+export const getPublicFeaturedBlogs = async (limit?: number): Promise<ApiResponse<Blog[]>> => {
+  return getPublicBlogs({ featured: true, limit });
+};
+
+export const getPublicBlogBySlug = async (slug: string): Promise<ApiResponse<Blog>> => {
+  return publicApiRequest<Blog>(`/blogs/slug/${slug}`, {
     method: 'GET',
   });
 };
@@ -1048,6 +1541,9 @@ export const getPublicPCBuilderProducts = async (
   if (filters.prior_selections && filters.prior_selections.length > 0) {
     params.append('prior_selections', JSON.stringify(filters.prior_selections));
   }
+  if (filters.search && filters.search.trim()) params.append('search', filters.search.trim());
+  if (filters.limit !== undefined) params.append('limit', String(filters.limit));
+  if (filters.offset !== undefined) params.append('offset', String(filters.offset));
 
   return publicApiRequest<Product[]>(`/pc-builder/products?${params.toString()}`, {
     method: 'GET',

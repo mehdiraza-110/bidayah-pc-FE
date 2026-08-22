@@ -25,6 +25,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Loader } from '@/components/ui/Loader';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -715,9 +716,7 @@ const CheckoutPage: React.FC = () => {
                     className="space-y-4 pt-4 border-t border-border"
                   >
                     {isLoadingBilling ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        Loading banking information...
-                      </div>
+                      <Loader label="Loading banking information..." />
                     ) : adminBillingInfo ? (
                       <>
                         <div className="p-4 bg-muted/30 rounded-lg space-y-3">
@@ -942,14 +941,7 @@ const CheckoutPage: React.FC = () => {
                     disabled={isProcessing}
                   >
                     {isProcessing ? (
-                      <span className="flex items-center gap-2">
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                          className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                        />
-                        PROCESSING...
-                      </span>
+                      <Loader size="sm" label="Processing..." />
                     ) : (
                       <span className="flex items-center gap-2">
                         <Lock className="w-4 h-4" />
