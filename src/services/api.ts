@@ -98,12 +98,15 @@ export interface UpdateVendorRequest {
 export interface SiteSettings {
   id?: string;
   whatsapp_number?: string | null;
+  // How many active Featured Gaming PCs show on the homepage.
+  featured_gaming_pcs_limit?: number;
   created_at?: string;
   updated_at?: string;
 }
 
 export interface UpdateSiteSettingsRequest {
   whatsapp_number?: string;
+  featured_gaming_pcs_limit?: number;
 }
 
 // Store location interfaces
@@ -144,6 +147,9 @@ export interface Category {
   // Only populated on PC builder options — how many of this category's
   // products a customer may add to a single build (default 1).
   max_quantity?: number;
+  // Only populated on PC builder options — when true (and max_quantity > 1),
+  // a customer can add the SAME product more than once for this step.
+  allow_duplicate_products?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -366,6 +372,17 @@ export interface CreateProductRequest {
   key_features?: ProductKeyFeatureInput[];
 }
 
+// One gallery slot in the desired final order — either an already-uploaded
+// image/video kept in place (no re-upload needed) or a brand-new file. Lets
+// the admin reorder, replace a single slot, or remove one without having to
+// re-upload every other image every time.
+export interface ProductMediaSlotInput {
+  source: 'existing' | 'new';
+  url?: string; // required when source === 'existing'
+  file?: File; // required when source === 'new'
+  type: 'image' | 'video';
+}
+
 export interface UpdateProductRequest {
   name?: string;
   category_id?: string;
@@ -379,8 +396,9 @@ export interface UpdateProductRequest {
   new_product?: boolean;
   rating?: number;
   reviews_count?: number;
-  main_image?: File | string; // New main image
-  media?: File[]; // Up to 5 files (replaces all existing)
+  main_image?: File | string; // New main image file, or an existing URL to promote/keep as cover
+  /** Full desired gallery, in order — mix of kept existing slots and new uploads. Omit to leave the gallery untouched. */
+  media?: ProductMediaSlotInput[];
   specs?: string | string[]; // Comma-separated string or array (replaces all existing)
   key_features?: ProductKeyFeatureInput[];
 }
@@ -440,6 +458,9 @@ export interface PCBuilderCategoryConfig {
   display_order: number;
   is_active: boolean;
   max_quantity: number;
+  // When true (and max_quantity > 1), a customer can add the SAME product to
+  // this step more than once instead of only picking that many different products.
+  allow_duplicate_products: boolean;
 }
 
 export interface PCBuilderCategoryConfigItem {
@@ -447,6 +468,7 @@ export interface PCBuilderCategoryConfigItem {
   display_order: number;
   is_active: boolean;
   max_quantity: number;
+  allow_duplicate_products: boolean;
 }
 
 export interface PCBuilderOptions {
@@ -467,6 +489,121 @@ export interface PCBuilderCategoryVendorConfig {
   categories: Category[];
   vendors: Vendor[];
   associations: PCBuilderCategoryVendorAssociation[];
+}
+
+// Homepage Section config (admin-managed, ordered category showcase rows on the homepage)
+export interface HomepageSection {
+  id: string;
+  category_id: string;
+  title: string;
+  display_order: number;
+  is_active: boolean;
+  product_limit: number;
+  bg_color_light: string | null;
+  bg_color_dark: string | null;
+  // Optional full-bleed photo for the pinned category tile. NULL = plain icon tile.
+  image: string | null;
+  created_at: string;
+  updated_at: string;
+  category_name: string;
+  category_image?: string | null;
+  category_is_published?: boolean;
+}
+
+export interface CreateHomepageSectionRequest {
+  category_id: string;
+  title: string;
+  product_limit?: number;
+  is_active?: boolean;
+  bg_color_light?: string | null;
+  bg_color_dark?: string | null;
+  /** A File uploads a new image; a string passes an existing URL through unchanged. */
+  image?: File | string | null;
+}
+
+export interface UpdateHomepageSectionRequest {
+  category_id?: string;
+  title?: string;
+  display_order?: number;
+  is_active?: boolean;
+  product_limit?: number;
+  bg_color_light?: string | null;
+  bg_color_dark?: string | null;
+  /** A File uploads a new image; '' or null explicitly clears it; omit to leave unchanged. */
+  image?: File | string | null;
+}
+
+// Shape returned by the public endpoint — the storefront homepage only needs
+// enough to fetch that category's products and render the section.
+export interface PublicHomepageSection {
+  id: string;
+  category_id: string;
+  title: string;
+  product_limit: number;
+  bg_color_light: string | null;
+  bg_color_dark: string | null;
+  image: string | null;
+  category_name: string;
+}
+
+// Featured Gaming PC — an admin-curated build shown on the homepage before
+// "Shop By Category". Has its own bundle price (not a sum of components) and
+// lists the real products it's made of, both for display and for the cart
+// bundle line item created when a customer adds it.
+export interface FeaturedGamingPcProduct {
+  id: string;
+  name: string;
+  image: string | null;
+  price: number;
+  category_id: string | null;
+  category_name?: string | null;
+  // How many of this product this build includes — lets the same product
+  // appear more than once (e.g. 2x RAM sticks).
+  quantity: number;
+}
+
+export interface FeaturedGamingPc {
+  id: string;
+  name: string;
+  // Server-generated, unique — used to build the clean /gaming-pc/<slug> URL.
+  slug: string | null;
+  description: string | null;
+  price: number;
+  key_features: string[];
+  is_active: boolean;
+  display_order: number;
+  images: string[];
+  products: FeaturedGamingPcProduct[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeaturedGamingPcProductSelection {
+  product_id: string;
+  quantity: number;
+}
+
+export interface CreateFeaturedGamingPcRequest {
+  name: string;
+  description?: string | null;
+  price: number;
+  key_features?: string[];
+  is_active?: boolean;
+  /** At least 1 required, up to 5. */
+  images: File[];
+  products?: FeaturedGamingPcProductSelection[];
+}
+
+export interface UpdateFeaturedGamingPcRequest {
+  name?: string;
+  description?: string | null;
+  price?: number;
+  key_features?: string[];
+  is_active?: boolean;
+  display_order?: number;
+  /** Omit to leave the existing gallery untouched; provide to fully replace it (still 1-5 images). */
+  images?: File[];
+  products?: FeaturedGamingPcProductSelection[];
 }
 
 export interface PCBuilderPriorSelection {
@@ -1180,10 +1317,21 @@ export const updateProduct = async (id: string, productData: UpdateProductReques
     }
   }
 
-  // Handle media files (replaces all existing media)
-  if (productData.media && productData.media.length > 0) {
-    productData.media.forEach(file => {
-      formData.append('media', file);
+  // Handle gallery — a manifest describing the full desired final order (mix
+  // of kept existing slots + new uploads), so reordering/replacing/removing
+  // a single slot doesn't require re-uploading every other image. Omitted
+  // entirely (not even `[]`) leaves the gallery untouched.
+  if (productData.media !== undefined) {
+    const manifest = productData.media.map((slot) => ({
+      source: slot.source,
+      url: slot.source === 'existing' ? slot.url : undefined,
+      type: slot.type,
+    }));
+    formData.append('media_manifest', JSON.stringify(manifest));
+    productData.media.forEach((slot) => {
+      if (slot.source === 'new' && slot.file) {
+        formData.append('media', slot.file);
+      }
     });
   }
 
@@ -1349,6 +1497,142 @@ export const updatePCBuilderCategoryVendors = async (
   });
 };
 
+// Homepage Section config APIs (admin: which categories show as homepage rows, in what order,
+// with what title/limit/background colors)
+export const getHomepageSections = async (): Promise<ApiResponse<HomepageSection[]>> => {
+  return apiRequest<HomepageSection[]>('/homepage-sections', {
+    method: 'GET',
+  });
+};
+
+// Builds either a plain JSON body or (when `image` is a File) a multipart
+// FormData body — mirrors createCategory/updateCategory's approach.
+const buildHomepageSectionBody = (
+  data: CreateHomepageSectionRequest | UpdateHomepageSectionRequest
+): { body: string | FormData; isMultipart: boolean } => {
+  if (data.image instanceof File) {
+    const formData = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value === undefined) return;
+      if (key === 'image') {
+        formData.append('image', value as File);
+      } else {
+        formData.append(key, String(value));
+      }
+    });
+    return { body: formData, isMultipart: true };
+  }
+
+  return { body: JSON.stringify(data), isMultipart: false };
+};
+
+export const createHomepageSection = async (
+  data: CreateHomepageSectionRequest
+): Promise<ApiResponse<HomepageSection>> => {
+  const { body, isMultipart } = buildHomepageSectionBody(data);
+  return apiRequest<HomepageSection>(
+    '/homepage-sections',
+    { method: 'POST', body },
+    isMultipart
+  );
+};
+
+export const updateHomepageSection = async (
+  id: string,
+  data: UpdateHomepageSectionRequest
+): Promise<ApiResponse<HomepageSection>> => {
+  const { body, isMultipart } = buildHomepageSectionBody(data);
+  return apiRequest<HomepageSection>(
+    `/homepage-sections/${id}`,
+    { method: 'PUT', body },
+    isMultipart
+  );
+};
+
+export const deleteHomepageSection = async (id: string): Promise<ApiResponse<null>> => {
+  return apiRequest<null>(`/homepage-sections/${id}`, {
+    method: 'DELETE',
+  });
+};
+
+export const reorderHomepageSections = async (
+  sections: { id: string; display_order: number }[]
+): Promise<ApiResponse<HomepageSection[]>> => {
+  return apiRequest<HomepageSection[]>('/homepage-sections/reorder', {
+    method: 'PUT',
+    body: JSON.stringify({ sections }),
+  });
+};
+
+// Featured Gaming PC APIs (admin)
+export const getFeaturedGamingPcs = async (): Promise<ApiResponse<FeaturedGamingPc[]>> => {
+  return apiRequest<FeaturedGamingPc[]>('/featured-gaming-pcs', {
+    method: 'GET',
+  });
+};
+
+export const getFeaturedGamingPcById = async (id: string): Promise<ApiResponse<FeaturedGamingPc>> => {
+  return apiRequest<FeaturedGamingPc>(`/featured-gaming-pcs/${id}`, {
+    method: 'GET',
+  });
+};
+
+// Always multipart — images (Files) always ride alongside the other fields on create.
+export const createFeaturedGamingPc = async (
+  data: CreateFeaturedGamingPcRequest
+): Promise<ApiResponse<FeaturedGamingPc>> => {
+  const formData = new FormData();
+  formData.append('name', data.name);
+  if (data.description !== undefined) formData.append('description', data.description || '');
+  formData.append('price', String(data.price));
+  if (data.key_features !== undefined) formData.append('key_features', JSON.stringify(data.key_features));
+  if (data.is_active !== undefined) formData.append('is_active', String(data.is_active));
+  if (data.products !== undefined) formData.append('products', JSON.stringify(data.products));
+  data.images.forEach((file) => formData.append('images', file));
+
+  return apiRequest<FeaturedGamingPc>(
+    '/featured-gaming-pcs',
+    { method: 'POST', body: formData },
+    true // Skip JSON Content-Type for multipart/form-data
+  );
+};
+
+export const updateFeaturedGamingPc = async (
+  id: string,
+  data: UpdateFeaturedGamingPcRequest
+): Promise<ApiResponse<FeaturedGamingPc>> => {
+  const formData = new FormData();
+  if (data.name !== undefined) formData.append('name', data.name);
+  if (data.description !== undefined) formData.append('description', data.description || '');
+  if (data.price !== undefined) formData.append('price', String(data.price));
+  if (data.key_features !== undefined) formData.append('key_features', JSON.stringify(data.key_features));
+  if (data.is_active !== undefined) formData.append('is_active', String(data.is_active));
+  if (data.display_order !== undefined) formData.append('display_order', String(data.display_order));
+  if (data.products !== undefined) formData.append('products', JSON.stringify(data.products));
+  if (data.images !== undefined) data.images.forEach((file) => formData.append('images', file));
+
+  return apiRequest<FeaturedGamingPc>(
+    `/featured-gaming-pcs/${id}`,
+    { method: 'PUT', body: formData },
+    true
+  );
+};
+
+export const deleteFeaturedGamingPc = async (id: string): Promise<ApiResponse<null>> => {
+  return apiRequest<null>(`/featured-gaming-pcs/${id}`, {
+    method: 'DELETE',
+  });
+};
+
+export const reorderFeaturedGamingPcs = async (
+  gamingPcs: { id: string; display_order: number }[]
+): Promise<ApiResponse<FeaturedGamingPc[]>> => {
+  return apiRequest<FeaturedGamingPc[]>('/featured-gaming-pcs/reorder', {
+    method: 'PUT',
+    body: JSON.stringify({ gaming_pcs: gamingPcs }),
+  });
+};
+
 // Public API functions (no authentication required)
 // These functions use a separate helper that doesn't require auth
 
@@ -1494,6 +1778,33 @@ export const getPublicCategories = async (): Promise<ApiResponse<Category[]>> =>
 
 export const getPublicCategoryById = async (id: string): Promise<ApiResponse<Category>> => {
   return publicApiRequest<Category>(`/categories/${id}`, {
+    method: 'GET',
+  });
+};
+
+// Public Homepage Sections API (active sections w/ published category, in admin order)
+export const getPublicHomepageSections = async (): Promise<ApiResponse<PublicHomepageSection[]>> => {
+  return publicApiRequest<PublicHomepageSection[]>('/homepage-sections', {
+    method: 'GET',
+  });
+};
+
+// Public Featured Gaming PCs API (active builds, capped at the admin-configured limit)
+export const getPublicFeaturedGamingPcs = async (): Promise<ApiResponse<FeaturedGamingPc[]>> => {
+  return publicApiRequest<FeaturedGamingPc[]>('/featured-gaming-pcs', {
+    method: 'GET',
+  });
+};
+
+// Public single build lookup (storefront detail page) — 404s if inactive.
+export const getPublicFeaturedGamingPcById = async (id: string): Promise<ApiResponse<FeaturedGamingPc>> => {
+  return publicApiRequest<FeaturedGamingPc>(`/featured-gaming-pcs/${id}`, {
+    method: 'GET',
+  });
+};
+
+export const getPublicFeaturedGamingPcBySlug = async (slug: string): Promise<ApiResponse<FeaturedGamingPc>> => {
+  return publicApiRequest<FeaturedGamingPc>(`/featured-gaming-pcs/slug/${slug}`, {
     method: 'GET',
   });
 };
@@ -1759,7 +2070,7 @@ export const createBankTransferOrder = async (
   // Order Information
   formData.append('items', JSON.stringify(orderData.items));
   // Note: shipping and tax are automatically calculated by backend
-  // shipping is always 0, tax is 5% VAT of subtotal
+  // shipping is always 0, tax/VAT has been removed (always 0)
   // Do not send shipping or tax - they will be ignored
 
   // Payment Screenshot

@@ -18,6 +18,8 @@ import {
   ChevronDown,
   Search,
   X,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/layout/Navbar';
@@ -55,12 +57,22 @@ const getCategoryIcon = (categoryName: string) => {
 // One product a customer has added under a category, plus the vendor it was
 // picked under (inferred at selection time so the summary/compatibility
 // engine can show/use it even when no vendor pill was explicitly chosen).
+// `quantity` > 1 only happens when the category's `allow_duplicate_products`
+// admin setting is on — otherwise every entry stays at 1 and a second click
+// on the same product deselects it instead (see handleSelectProduct).
 interface SelectedItem {
   product: ApiProduct;
   vendor?: Vendor;
+  quantity: number;
 }
 
 const getCategoryMaxQuantity = (category?: Category) => Math.max(1, category?.max_quantity ?? 1);
+const getCategoryAllowsDuplicates = (category?: Category) =>
+  getCategoryMaxQuantity(category) > 1 && Boolean(category?.allow_duplicate_products);
+// Total units selected for a category — distinct products count as 1 each,
+// but a duplicated product's extra units all count too, since max_quantity
+// caps the total number of units, not just the number of distinct products.
+const getSelectedUnitCount = (items: SelectedItem[]) => items.reduce((sum, item) => sum + item.quantity, 0);
 
 const PCBuilderPage: React.FC = () => {
   const navigate = useNavigate();
@@ -278,29 +290,42 @@ const PCBuilderPage: React.FC = () => {
     const categoryId = product.category_id || activeCategoryId;
     const category = categories.find(c => c.id === categoryId);
     const maxQuantity = getCategoryMaxQuantity(category);
+    const allowDuplicates = getCategoryAllowsDuplicates(category);
     const current = selectedProducts[categoryId] || [];
     const existingIndex = current.findIndex(item => item.product.id === product.id);
     const inferredVendor = resolveProductVendor(product);
+    const totalUnits = getSelectedUnitCount(current);
 
     if (maxQuantity <= 1) {
       // Single-select category: picking a product replaces the current one.
       setSelectedProducts(prev => ({
         ...prev,
-        [categoryId]: [{ product, vendor: inferredVendor }],
+        [categoryId]: [{ product, vendor: inferredVendor, quantity: 1 }],
+      }));
+    } else if (existingIndex !== -1 && allowDuplicates) {
+      // Admin has allowed picking the same product more than once for this
+      // step — clicking it again adds one more unit, capped at maxQuantity.
+      if (totalUnits >= maxQuantity) {
+        toast.error(`You can only add up to ${maxQuantity} for ${category?.category_name || 'this category'}.`);
+        return;
+      }
+      setSelectedProducts(prev => ({
+        ...prev,
+        [categoryId]: current.map((item, i) => (i === existingIndex ? { ...item, quantity: item.quantity + 1 } : item)),
       }));
     } else if (existingIndex !== -1) {
-      // Already selected: clicking it again deselects it.
+      // Already selected, duplicates not allowed for this category: clicking it again deselects it.
       setSelectedProducts(prev => ({
         ...prev,
         [categoryId]: current.filter((_, i) => i !== existingIndex),
       }));
-    } else if (current.length >= maxQuantity) {
+    } else if (totalUnits >= maxQuantity) {
       toast.error(`You can only add up to ${maxQuantity} for ${category?.category_name || 'this category'}.`);
       return;
     } else {
       setSelectedProducts(prev => ({
         ...prev,
-        [categoryId]: [...current, { product, vendor: inferredVendor }],
+        [categoryId]: [...current, { product, vendor: inferredVendor, quantity: 1 }],
       }));
     }
 
@@ -358,9 +383,39 @@ const PCBuilderPage: React.FC = () => {
     }));
   };
 
+  // +/- stepper for a duplicate-allowed category's selected item (build summary panel).
+  // Dropping to 0 removes the entry entirely rather than leaving a zero-quantity row.
+  const handleChangeQuantity = (categoryId: string, productId: string, delta: 1 | -1) => {
+    const category = categories.find(c => c.id === categoryId);
+    const maxQuantity = getCategoryMaxQuantity(category);
+    const current = selectedProducts[categoryId] || [];
+    const totalUnits = getSelectedUnitCount(current);
+
+    if (delta > 0 && totalUnits >= maxQuantity) {
+      toast.error(`You can only add up to ${maxQuantity} for ${category?.category_name || 'this category'}.`);
+      return;
+    }
+
+    setSelectedProducts(prev => {
+      const items = prev[categoryId] || [];
+      const index = items.findIndex(item => item.product.id === productId);
+      if (index === -1) return prev;
+
+      const nextQuantity = items[index].quantity + delta;
+      if (nextQuantity <= 0) {
+        return { ...prev, [categoryId]: items.filter((_, i) => i !== index) };
+      }
+
+      return {
+        ...prev,
+        [categoryId]: items.map((item, i) => (i === index ? { ...item, quantity: nextQuantity } : item)),
+      };
+    });
+  };
+
   const getTotalPrice = () => {
     return Object.values(selectedProducts).reduce((total, items) => {
-      return total + (items || []).reduce((sum, item) => sum + Number(item.product.price || 0), 0);
+      return total + (items || []).reduce((sum, item) => sum + Number(item.product.price || 0) * item.quantity, 0);
     }, 0);
   };
 
@@ -380,9 +435,10 @@ const PCBuilderPage: React.FC = () => {
       category: 'Gaming PC',
       price: getTotalPrice(),
       image: selectedItems[0]?.product.image || 'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?w=600',
-      specs: selectedItems.map(({ product, vendor }) => {
+      specs: selectedItems.map(({ product, vendor, quantity }) => {
         const categoryName = product.category_name || categories.find(category => category.id === product.category_id)?.category_name || 'Component';
-        return vendor ? `${categoryName}: ${product.name} (${vendor.vendor_name})` : `${categoryName}: ${product.name}`;
+        const qtySuffix = quantity > 1 ? ` ×${quantity}` : '';
+        return (vendor ? `${categoryName}: ${product.name} (${vendor.vendor_name})` : `${categoryName}: ${product.name}`) + qtySuffix;
       }),
       rating: 5.0,
       reviews: 0,
@@ -454,7 +510,9 @@ const PCBuilderPage: React.FC = () => {
                   const isComplete = selectedItems.length > 0;
                   const isActive = activeCategoryId === category.id;
                   const maxQuantity = getCategoryMaxQuantity(category);
-                  const categoryTotal = selectedItems.reduce((sum, item) => sum + Number(item.product.price || 0), 0);
+                  const allowDuplicates = getCategoryAllowsDuplicates(category);
+                  const selectedUnitCount = getSelectedUnitCount(selectedItems);
+                  const categoryTotal = selectedItems.reduce((sum, item) => sum + Number(item.product.price || 0) * item.quantity, 0);
                   // "Fresh" = the loaded vendors/products actually belong to this step, so
                   // switching steps shows a loader instead of the previous step's items.
                   const hasFreshVendors = vendorsCategoryId === category.id;
@@ -503,10 +561,10 @@ const PCBuilderPage: React.FC = () => {
                             </p>
                             {selectedItems.length > 0 ? (
                               <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                                {selectedItems.length > 1
-                                  ? `${selectedItems.length} selected`
+                                {selectedUnitCount > 1
+                                  ? `${selectedUnitCount} selected`
                                   : (selectedItems[0].vendor && `${selectedItems[0].vendor.vendor_name} · `)}
-                                {selectedItems.length === 1 && selectedItems[0].product.name}
+                                {selectedUnitCount === 1 && selectedItems[0].product.name}
                               </p>
                             ) : (
                               <p className="text-xs sm:text-sm text-muted-foreground">Not selected yet</p>
@@ -601,8 +659,10 @@ const PCBuilderPage: React.FC = () => {
                               {/* Products for this category, optionally filtered by vendor */}
                               {maxQuantity > 1 && (
                                 <p className="text-xs text-muted-foreground mb-3">
-                                  Select up to {maxQuantity} — click a selected item again to remove it.
-                                  {selectedItems.length > 0 && ` (${selectedItems.length}/${maxQuantity} selected)`}
+                                  {allowDuplicates
+                                    ? `Select up to ${maxQuantity} units — click an item again to add another of the same one.`
+                                    : `Select up to ${maxQuantity} — click a selected item again to remove it.`}
+                                  {selectedUnitCount > 0 && ` (${selectedUnitCount}/${maxQuantity} selected)`}
                                 </p>
                               )}
 
@@ -647,7 +707,8 @@ const PCBuilderPage: React.FC = () => {
                                 >
                                   {products.map((product, index) => {
                                     const productCategoryId = product.category_id || activeCategoryId;
-                                    const isSelected = (selectedProducts[productCategoryId] || []).some(item => item.product.id === product.id);
+                                    const selectedQuantity = (selectedProducts[productCategoryId] || []).find(item => item.product.id === product.id)?.quantity || 0;
+                                    const isSelected = selectedQuantity > 0;
                                     const specs = product.specs?.map(spec => spec.spec_text) || [];
 
                                     return (
@@ -666,8 +727,12 @@ const PCBuilderPage: React.FC = () => {
                                         whileTap={{ scale: 0.98 }}
                                       >
                                         {isSelected && (
-                                          <div className="absolute top-2 right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                                            <Check className="w-4 h-4 text-primary-foreground" />
+                                          <div className="absolute top-2 right-2 min-w-6 h-6 px-1 bg-primary rounded-full flex items-center justify-center">
+                                            {selectedQuantity > 1 ? (
+                                              <span className="text-xs font-orbitron font-bold text-primary-foreground">×{selectedQuantity}</span>
+                                            ) : (
+                                              <Check className="w-4 h-4 text-primary-foreground" />
+                                            )}
                                           </div>
                                         )}
 
@@ -755,8 +820,9 @@ const PCBuilderPage: React.FC = () => {
                       {categories.flatMap((category) => {
                         const items = selectedProducts[category.id] || [];
                         const Icon = getCategoryIcon(category.category_name);
+                        const allowDuplicates = getCategoryAllowsDuplicates(category);
 
-                        return items.map(({ product, vendor }) => (
+                        return items.map(({ product, vendor, quantity }) => (
                           <motion.div
                             key={product.id}
                             layout
@@ -788,18 +854,41 @@ const PCBuilderPage: React.FC = () => {
                                   {vendor?.vendor_name || ' '}
                                 </span>
                                 <span className="text-primary font-orbitron text-sm font-bold shrink-0">
-                                  AED {Number(product.price).toLocaleString()}
+                                  AED {(Number(product.price) * quantity).toLocaleString()}
+                                  {quantity > 1 && (
+                                    <span className="text-muted-foreground font-rajdhani font-normal"> ({quantity}×)</span>
+                                  )}
                                 </span>
                               </div>
                             </div>
-                            <motion.button
-                              onClick={() => handleRemoveProduct(category.id, product.id)}
-                              className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-all shrink-0"
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </motion.button>
+                            {allowDuplicates ? (
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleChangeQuantity(category.id, product.id, -1)}
+                                  className="p-1 rounded-md border border-border text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="w-5 text-center font-mono-tech text-xs">{quantity}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleChangeQuantity(category.id, product.id, 1)}
+                                  className="p-1 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <motion.button
+                                onClick={() => handleRemoveProduct(category.id, product.id)}
+                                className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-all shrink-0"
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </motion.button>
+                            )}
                           </motion.div>
                         ));
                       })}

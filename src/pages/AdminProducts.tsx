@@ -22,6 +22,9 @@ import {
   ChevronRight,
   LayoutGrid,
   List,
+  ChevronUp,
+  ChevronDown,
+  Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AdminLayout from '@/components/layout/AdminLayout';
@@ -32,7 +35,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { Product, ProductMedia } from '@/data/products';
+import { Product } from '@/data/products';
 import { mapApiProductToLocal as mapApiProductToLocalBase } from '@/lib/mapProduct';
 import { 
   getVendors, 
@@ -48,7 +51,8 @@ import {
   type Category,
   type Product as ApiProduct,
   type KeyFeature,
-  type ProductKeyFeatureInput
+  type ProductKeyFeatureInput,
+  type ProductMediaSlotInput
 } from '@/services/api';
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import { cn } from '@/lib/utils';
@@ -58,6 +62,19 @@ type KeyFeatureFormRow = {
   key_feature_id: string;
   feature_key: string;
   value: string;
+};
+
+// One cover/gallery slot in the admin form — either an already-uploaded
+// image/video kept in place (no re-upload needed) or a brand-new file just
+// picked. `previewUrl` is what actually renders (an objectURL for a new
+// file, the real URL for an existing one); `key` is stable across reorders.
+type MediaSlotState = {
+  key: string;
+  source: 'existing' | 'new';
+  url?: string;
+  file?: File;
+  previewUrl: string;
+  type: 'image' | 'video';
 };
 
 type ApiProductVendorFallback = ApiProduct & {
@@ -155,8 +172,13 @@ const AdminProductsPage: React.FC = () => {
     new: false,
   });
 
-  const [mediaFiles, setMediaFiles] = useState<(File | null)[]>(Array(5).fill(null));
-  const [mediaPreviews, setMediaPreviews] = useState<(ProductMedia | null)[]>(Array(5).fill(null));
+  // One image/video slot — either an already-uploaded file kept in place (no
+  // re-upload needed) or a brand-new file just picked. `previewUrl` is what
+  // actually renders (an objectURL for a new file, the real URL for an
+  // existing one); `key` is stable across reorders for React's sake.
+  const [coverSlot, setCoverSlot] = useState<MediaSlotState | null>(null);
+  const [gallerySlots, setGallerySlots] = useState<MediaSlotState[]>([]);
+  const nextSlotKeyRef = useRef(0);
   const [specInput, setSpecInput] = useState('');
   const [keyFeatureOptions, setKeyFeatureOptions] = useState<KeyFeature[]>([]);
   const [keyFeatureRows, setKeyFeatureRows] = useState<KeyFeatureFormRow[]>([]);
@@ -259,17 +281,26 @@ const AdminProductsPage: React.FC = () => {
             category_id: product.category_id || response.data.category_id,
             vendor_id: resolveProductVendorId(response.data, vendorList),
           });
-          // Set media previews
-          const mediaArray = product.media || [];
-          const previews: (ProductMedia | null)[] = Array(5).fill(null);
-          mediaArray.forEach((media, index) => {
-            if (index < 5) previews[index] = media;
-          });
-          // If no media array but has image, use image as first media
-          if (mediaArray.length === 0 && product.image) {
-            previews[0] = { url: product.image, type: 'image' };
-          }
-          setMediaPreviews(previews);
+          // Cover and gallery are independent on the backend (main `image`
+          // column vs. the `product_media` table) — load them as such,
+          // instead of conflating "gallery slot 0" with "the cover image"
+          // the way the old single 5-slot array used to (that's what made
+          // the cover silently vanish from the form whenever a product also
+          // had gallery media: slot 0 showed a gallery photo instead).
+          setCoverSlot(
+            product.image
+              ? { key: `existing-cover-${product.image}`, source: 'existing', url: product.image, previewUrl: product.image, type: 'image' }
+              : null
+          );
+          setGallerySlots(
+            (product.media || []).slice(0, 5).map((media) => ({
+              key: `existing-${media.url}`,
+              source: 'existing',
+              url: media.url,
+              previewUrl: media.url,
+              type: media.type,
+            }))
+          );
           // Set specs
           setSpecInput(product.specs.join(', '));
           setKeyFeatureRows(
@@ -315,88 +346,103 @@ const AdminProductsPage: React.FC = () => {
   }, [formData.category_id]);
 
 
-  const handleMediaUpload = (index: number, file: File | null) => {
-    if (!file) return;
-
-    // Check if file is image or video
+  const makeSlotFromFile = (file: File): MediaSlotState | null => {
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
-
     if (!isImage && !isVideo) {
       toast.error('Please upload an image or video file');
+      return null;
+    }
+    return {
+      key: `new-${nextSlotKeyRef.current++}`,
+      source: 'new',
+      file,
+      previewUrl: URL.createObjectURL(file),
+      type: isImage ? 'image' : 'video',
+    };
+  };
+
+  const handleCoverFileSelect = (file: File | null) => {
+    if (!file) return;
+    const slot = makeSlotFromFile(file);
+    if (!slot) return;
+    if (coverSlot?.source === 'new') URL.revokeObjectURL(coverSlot.previewUrl);
+    setCoverSlot(slot);
+  };
+
+  const handleAddGallerySlot = (file: File | null) => {
+    if (!file) return;
+    if (gallerySlots.length >= 5) {
+      toast.error('You can only add up to 5 gallery photos/videos');
+      return;
+    }
+    const slot = makeSlotFromFile(file);
+    if (!slot) return;
+    setGallerySlots(prev => [...prev, slot]);
+  };
+
+  const handleReplaceGallerySlot = (index: number, file: File | null) => {
+    if (!file) return;
+    const slot = makeSlotFromFile(file);
+    if (!slot) return;
+    setGallerySlots(prev => {
+      const removed = prev[index];
+      if (removed?.source === 'new') URL.revokeObjectURL(removed.previewUrl);
+      return prev.map((s, i) => (i === index ? slot : s));
+    });
+  };
+
+  const handleRemoveGallerySlot = (index: number) => {
+    setGallerySlots(prev => {
+      const removed = prev[index];
+      if (removed?.source === 'new') URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const handleMoveGallerySlot = (index: number, direction: -1 | 1) => {
+    setGallerySlots(prev => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+  };
+
+  // Revokes any objectURLs from newly-picked (not-yet-uploaded) files before
+  // clearing the form's media state, so they don't leak.
+  const resetMediaState = () => {
+    if (coverSlot?.source === 'new') URL.revokeObjectURL(coverSlot.previewUrl);
+    gallerySlots.forEach(slot => {
+      if (slot.source === 'new') URL.revokeObjectURL(slot.previewUrl);
+    });
+    setCoverSlot(null);
+    setGallerySlots([]);
+  };
+
+  // Swaps a gallery photo into the cover slot, and the previous cover (if
+  // any) back into that same gallery position — so promoting an existing
+  // gallery image to the cover never needs a re-upload.
+  const handlePromoteToCover = (index: number) => {
+    const promoted = gallerySlots[index];
+    if (!promoted) return;
+    if (promoted.type !== 'image') {
+      toast.error('Only an image can be the cover — pick a photo, not a video');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const newFiles = [...mediaFiles];
-      newFiles[index] = file;
-      setMediaFiles(newFiles);
-
-      const newPreviews = [...mediaPreviews];
-      newPreviews[index] = {
-        url: reader.result as string,
-        type: isImage ? 'image' : 'video',
-      };
-      setMediaPreviews(newPreviews);
-
-      // Set first media as main image
-      if (index === 0 && isImage) {
-        setFormData(prev => ({ ...prev, image: reader.result as string }));
+    const previousCover = coverSlot;
+    setCoverSlot(promoted);
+    setGallerySlots(prev => {
+      const next = [...prev];
+      if (previousCover) {
+        next[index] = previousCover;
+      } else {
+        next.splice(index, 1);
       }
-
-      // Update media array in formData
-      const mediaArray: ProductMedia[] = newPreviews
-        .filter((m): m is ProductMedia => m !== null)
-        .map((m, i) => ({
-          url: m.url,
-          type: m.type,
-        }));
-      setFormData(prev => ({ ...prev, media: mediaArray }));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleMediaUrlChange = (index: number, url: string, type: 'image' | 'video' = 'image') => {
-    const newPreviews = [...mediaPreviews];
-    newPreviews[index] = url ? { url, type } : null;
-    setMediaPreviews(newPreviews);
-
-    if (index === 0 && type === 'image') {
-      setFormData(prev => ({ ...prev, image: url }));
-    }
-
-    // Update media array in formData
-    const mediaArray: ProductMedia[] = newPreviews
-      .filter((m): m is ProductMedia => m !== null)
-      .map((m) => ({
-        url: m.url,
-        type: m.type,
-      }));
-    setFormData(prev => ({ ...prev, media: mediaArray }));
-  };
-
-  const handleRemoveMedia = (index: number) => {
-    const newFiles = [...mediaFiles];
-    newFiles[index] = null;
-    setMediaFiles(newFiles);
-
-    const newPreviews = [...mediaPreviews];
-    newPreviews[index] = null;
-    setMediaPreviews(newPreviews);
-
-    if (index === 0) {
-      setFormData(prev => ({ ...prev, image: '' }));
-    }
-
-    // Update media array in formData
-    const mediaArray: ProductMedia[] = newPreviews
-      .filter((m): m is ProductMedia => m !== null)
-      .map((m) => ({
-        url: m.url,
-        type: m.type,
-      }));
-    setFormData(prev => ({ ...prev, media: mediaArray }));
+      return next;
+    });
   };
 
   const handleAddSpec = () => {
@@ -458,8 +504,8 @@ const AdminProductsPage: React.FC = () => {
       return;
     }
 
-    // For create, main_image is required
-    if (!isEditing && !mediaFiles[0] && !formData.image) {
+    // For create, a cover image is required
+    if (!isEditing && !coverSlot) {
       toast.error('Please upload a main product image');
       return;
     }
@@ -469,11 +515,20 @@ const AdminProductsPage: React.FC = () => {
     // Use API
     (async () => {
       try {
-        // Get main image (file or URL)
-        const mainImage: File | string | undefined = mediaFiles[0] || formData.image || undefined;
+        // Cover — a new file to upload, or an existing URL kept/promoted from the gallery.
+        const mainImage: File | string | undefined =
+          coverSlot?.source === 'new' ? coverSlot.file : coverSlot?.source === 'existing' ? coverSlot.url : undefined;
 
-        // Get media files (excluding first one which is main image)
-        const additionalMediaFiles = mediaFiles.slice(1).filter((f): f is File => f !== null);
+        // Gallery — full desired order, mixing kept-existing slots and new uploads
+        // (see ProductMediaSlotInput; lets reordering/replacing/removing a single
+        // slot skip re-uploading every other image).
+        const mediaManifest: ProductMediaSlotInput[] = gallerySlots.map(slot => ({
+          source: slot.source,
+          url: slot.source === 'existing' ? slot.url : undefined,
+          file: slot.source === 'new' ? slot.file : undefined,
+          type: slot.type,
+        }));
+        const newGalleryFiles = gallerySlots.filter(slot => slot.source === 'new' && slot.file).map(slot => slot.file!);
 
         // Get specs as array
         const specsArray = formData.specs || [];
@@ -498,9 +553,10 @@ const AdminProductsPage: React.FC = () => {
             updateData.main_image = mainImage;
           }
 
-          if (additionalMediaFiles.length > 0) {
-            updateData.media = additionalMediaFiles;
-          }
+          // Always sent (even as []) — the form is always fully hydrated with
+          // the product's current gallery on load, so its current state IS
+          // the desired final state, whether or not anything actually changed.
+          updateData.media = mediaManifest;
 
           if (specsArray.length > 0) {
             updateData.specs = specsArray;
@@ -534,8 +590,7 @@ const AdminProductsPage: React.FC = () => {
               featured: false,
               new: false,
             });
-            setMediaFiles(Array(5).fill(null));
-            setMediaPreviews(Array(5).fill(null));
+            resetMediaState();
             setSpecInput('');
             setKeyFeatureRows([]);
             navigate('/admin/products');
@@ -564,8 +619,8 @@ const AdminProductsPage: React.FC = () => {
             original_price: formData.originalPrice || undefined,
           };
 
-          if (additionalMediaFiles.length > 0) {
-            createData.media = additionalMediaFiles;
+          if (newGalleryFiles.length > 0) {
+            createData.media = newGalleryFiles;
           }
 
           if (specsArray.length > 0) {
@@ -600,8 +655,7 @@ const AdminProductsPage: React.FC = () => {
               featured: false,
               new: false,
             });
-            setMediaFiles(Array(5).fill(null));
-            setMediaPreviews(Array(5).fill(null));
+            resetMediaState();
             setSpecInput('');
             setKeyFeatureRows([]);
             navigate('/admin/products');
@@ -653,8 +707,7 @@ const AdminProductsPage: React.FC = () => {
       in_stock: true,
       vendor_id: '',
     });
-    setMediaFiles(Array(5).fill(null));
-    setMediaPreviews(Array(5).fill(null));
+    resetMediaState();
     setSpecInput('');
     setKeyFeatureRows([]);
   };
@@ -942,104 +995,133 @@ const AdminProductsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Product Media */}
+                  {/* Cover Image */}
                   <div>
-                    <h2 className="font-orbitron text-xl font-bold mb-4">PRODUCT MEDIA (5 max - Images/Videos)</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                      {mediaPreviews.map((preview, index) => (
-                        <div key={index} className="space-y-2">
-                          <Label className="text-xs">
-                            {index === 0 ? 'Main Media *' : `Media ${index + 1}`}
-                          </Label>
-                          <div className="relative aspect-square border-2 border-dashed border-border rounded-lg overflow-hidden group">
-                            {preview ? (
-                              <>
-                                {preview.type === 'image' ? (
-                                  <img
-                                    src={preview.url}
-                                    alt={`Preview ${index + 1}`}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <video
-                                    src={preview.url}
-                                    className="w-full h-full object-cover"
-                                    controls={false}
-                                  />
-                                )}
-                                <div className="absolute top-1 right-1">
-                                  {preview.type === 'image' ? (
-                                    <ImageIcon className="w-4 h-4 text-primary" />
-                                  ) : (
-                                    <Video className="w-4 h-4 text-primary" />
-                                  )}
-                                </div>
-                                <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                  <motion.button
-                                    type="button"
-                                    onClick={() => handleRemoveMedia(index)}
-                                    className="p-2 bg-destructive text-destructive-foreground rounded-lg"
-                                    whileHover={{ scale: 1.1 }}
-                                    whileTap={{ scale: 0.9 }}
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </motion.button>
-                                </div>
-                              </>
-                            ) : (
-                              <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:bg-muted/50 transition-colors">
-                                <Upload className="w-8 h-8 text-muted-foreground mb-2" />
-                                <span className="text-xs text-muted-foreground text-center px-2">Upload Image/Video</span>
-                                <input
-                                  type="file"
-                                  accept="image/*,video/*"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) handleMediaUpload(index, file);
-                                  }}
-                                />
-                              </label>
-                            )}
-                          </div>
-                          <div className="flex gap-1">
-                            <Input
-                              type="url"
-                              placeholder="Or enter URL"
-                              value={preview?.url || ''}
-                              onChange={(e) => {
-                                const url = e.target.value;
-                                if (url) {
-                                  const type = url.match(/\.(mp4|webm|ogg)$/i) ? 'video' : 'image';
-                                  handleMediaUrlChange(index, url, type);
-                                } else {
-                                  handleRemoveMedia(index);
-                                }
-                              }}
-                              className="text-xs flex-1"
+                    <h2 className="font-orbitron text-xl font-bold mb-1">COVER IMAGE *</h2>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Shown as the main product photo everywhere on the storefront.
+                    </p>
+                    <div className="w-40">
+                      <div className="relative aspect-square border-2 border-dashed border-border rounded-lg overflow-hidden group">
+                        {coverSlot ? (
+                          <>
+                            <img src={coverSlot.previewUrl} alt="Cover" className="w-full h-full object-cover" />
+                            <label className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 cursor-pointer">
+                              <Upload className="w-6 h-6 text-foreground" />
+                              <span className="text-[10px] text-foreground">Replace</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => handleCoverFileSelect(e.target.files?.[0] || null)}
+                              />
+                            </label>
+                          </>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:bg-muted/50 transition-colors">
+                            <Upload className="w-8 h-8 text-muted-foreground mb-2" />
+                            <span className="text-xs text-muted-foreground text-center px-2">Upload Cover</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleCoverFileSelect(e.target.files?.[0] || null)}
                             />
-                            {preview && (
-                              <select
-                                value={preview.type}
-                                onChange={(e) => {
-                                  const newPreviews = [...mediaPreviews];
-                                  if (newPreviews[index]) {
-                                    newPreviews[index] = {
-                                      ...newPreviews[index]!,
-                                      type: e.target.value as 'image' | 'video',
-                                    };
-                                    setMediaPreviews(newPreviews);
-                                  }
-                                }}
-                                className="text-xs border border-input rounded px-2 bg-background"
-                              >
-                                <option value="image">Image</option>
-                                <option value="video">Video</option>
-                              </select>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gallery */}
+                  <div>
+                    <h2 className="font-orbitron text-xl font-bold mb-1">GALLERY (5 max — Images/Videos)</h2>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Use the arrows to reorder, or "Set as cover" to promote a photo to the main image — no re-upload needed either way.
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      {gallerySlots.map((slot, index) => (
+                        <div key={slot.key} className="space-y-2">
+                          <div className="relative aspect-square border-2 border-dashed border-border rounded-lg overflow-hidden group">
+                            {slot.type === 'image' ? (
+                              <img src={slot.previewUrl} alt={`Gallery ${index + 1}`} className="w-full h-full object-cover" />
+                            ) : (
+                              <video src={slot.previewUrl} className="w-full h-full object-cover" controls={false} />
                             )}
+                            <div className="absolute top-1 right-1">
+                              {slot.type === 'image' ? (
+                                <ImageIcon className="w-4 h-4 text-primary" />
+                              ) : (
+                                <Video className="w-4 h-4 text-primary" />
+                              )}
+                            </div>
+                            <div className="absolute inset-0 bg-background/85 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-1">
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveGallerySlot(index, -1)}
+                                  disabled={index === 0}
+                                  className="p-1 rounded-md bg-muted text-foreground disabled:opacity-30 disabled:pointer-events-none"
+                                  title="Move earlier"
+                                >
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveGallerySlot(index, 1)}
+                                  disabled={index === gallerySlots.length - 1}
+                                  className="p-1 rounded-md bg-muted text-foreground disabled:opacity-30 disabled:pointer-events-none"
+                                  title="Move later"
+                                >
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              {slot.type === 'image' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handlePromoteToCover(index)}
+                                  className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-primary text-primary-foreground"
+                                  title="Set as cover image"
+                                >
+                                  <Star className="w-3 h-3" />
+                                  Set as cover
+                                </button>
+                              )}
+                              <div className="flex gap-1">
+                                <label className="p-1.5 bg-muted text-foreground rounded cursor-pointer" title="Replace">
+                                  <Upload className="w-3.5 h-3.5" />
+                                  <input
+                                    type="file"
+                                    accept="image/*,video/*"
+                                    className="hidden"
+                                    onChange={(e) => handleReplaceGallerySlot(index, e.target.files?.[0] || null)}
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveGallerySlot(index)}
+                                  className="p-1.5 bg-destructive text-destructive-foreground rounded"
+                                  title="Remove"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ))}
+                      {gallerySlots.length < 5 && (
+                        <label className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                          <Plus className="w-8 h-8 text-muted-foreground mb-2" />
+                          <span className="text-xs text-muted-foreground text-center px-2">Add Image/Video</span>
+                          <input
+                            type="file"
+                            accept="image/*,video/*"
+                            className="hidden"
+                            onChange={(e) => handleAddGallerySlot(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                      )}
                     </div>
                   </div>
 

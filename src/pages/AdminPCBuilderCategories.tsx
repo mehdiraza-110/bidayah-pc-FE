@@ -16,6 +16,8 @@ import AdminLayout from '@/components/layout/AdminLayout';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { Loader } from '@/components/ui/Loader';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
 import {
   getPCBuilderCategoryConfig,
   updatePCBuilderCategoryConfig,
@@ -54,6 +56,7 @@ const AdminPCBuilderCategoriesPage: React.FC = () => {
         const withDefaults = response.data.map(category => ({
           ...category,
           max_quantity: category.max_quantity ?? 1,
+          allow_duplicate_products: category.allow_duplicate_products ?? false,
         }));
         const included = withDefaults
           .filter(category => category.is_active)
@@ -82,10 +85,25 @@ const AdminPCBuilderCategoriesPage: React.FC = () => {
 
   const handleMaxQuantityChange = (categoryId: string, delta: 1 | -1) => {
     setIncludedRows(prev =>
+      prev.map(item => {
+        if (item.category_id !== categoryId) return item;
+        const nextMaxQuantity = Math.max(1, Math.min(20, item.max_quantity + delta));
+        return {
+          ...item,
+          max_quantity: nextMaxQuantity,
+          // A single-select step (max 1) has nothing to duplicate — drop the flag
+          // rather than leave a stale "on" that re-appears if the qty goes back up.
+          allow_duplicate_products: nextMaxQuantity > 1 ? item.allow_duplicate_products : false,
+        };
+      })
+    );
+    setIsDirty(true);
+  };
+
+  const handleAllowDuplicateChange = (categoryId: string, allow: boolean) => {
+    setIncludedRows(prev =>
       prev.map(item =>
-        item.category_id === categoryId
-          ? { ...item, max_quantity: Math.max(1, Math.min(20, item.max_quantity + delta)) }
-          : item
+        item.category_id === categoryId ? { ...item, allow_duplicate_products: allow } : item
       )
     );
     setIsDirty(true);
@@ -122,12 +140,14 @@ const AdminPCBuilderCategoriesPage: React.FC = () => {
         display_order: index,
         is_active: true,
         max_quantity: row.max_quantity,
+        allow_duplicate_products: row.allow_duplicate_products,
       })),
       ...availableRows.map(row => ({
         category_id: row.category_id,
         display_order: 0,
         is_active: false,
         max_quantity: row.max_quantity,
+        allow_duplicate_products: row.allow_duplicate_products,
       })),
     ];
 
@@ -238,6 +258,26 @@ const AdminPCBuilderCategoriesPage: React.FC = () => {
                           <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
+                      <label
+                        className={cn(
+                          'hidden sm:flex items-center gap-1.5 shrink-0 mr-1 select-none',
+                          category.max_quantity > 1 ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'
+                        )}
+                        title={
+                          category.max_quantity > 1
+                            ? 'Let a customer add the same product to this step more than once (e.g. 2x of one fan), instead of only different products'
+                            : 'Raise Max Qty above 1 first — with only 1 slot, there\'s nothing to duplicate'
+                        }
+                      >
+                        <Checkbox
+                          checked={category.allow_duplicate_products}
+                          disabled={category.max_quantity <= 1}
+                          onCheckedChange={(checked) => handleAllowDuplicateChange(category.category_id, Boolean(checked))}
+                        />
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                          Allow same product ×2+
+                        </span>
+                      </label>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"

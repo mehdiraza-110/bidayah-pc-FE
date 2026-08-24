@@ -29,3 +29,14 @@ export const productUrl = (product: { id: string; name: string; slug?: string; c
 
   return `/product/${categorySlug || 'product'}/${productSlug}`;
 };
+
+/**
+ * Canonical, SEO-friendly Featured Gaming PC URL: `/gaming-pc/<slug>` — no id in sight.
+ * `slug` is the server-generated, unique lookup key (falls back to a client-side
+ * slugified name for a build the backend hasn't attached one to yet).
+ */
+export const gamingPcUrl = (gamingPc: { id: string; name: string; slug?: string | null }): string => {
+  const gamingPcSlug = gamingPc.slug || slugify(gamingPc.name);
+  // No name/slug to build a clean path from — fall back to the old id-based link.
+  return `/gaming-pc/${gamingPcSlug || gamingPc.id}`;
+};

@@ -149,7 +149,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
             </div>
 
             {/* Image — cycles through the gallery while hovered */}
-            <div className="relative aspect-square overflow-hidden bg-white p-2.5 sm:p-4">
+            <div className="relative aspect-square overflow-hidden bg-white p-2 sm:p-3">
               <motion.img
                 key={galleryImages[imageIndex]}
                 src={galleryImages[imageIndex] || product.image}
@@ -162,7 +162,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
             </div>
 
             {/* Content */}
-            <div className="p-3 sm:p-5">
+            <div className="p-2.5 sm:p-3.5">
               <h3 className="font-orbitron font-bold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem]">
                 {product.name}
               </h3>

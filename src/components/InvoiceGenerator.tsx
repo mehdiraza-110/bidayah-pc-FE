@@ -264,7 +264,7 @@ const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, open, onOpen
     doc.text(`AED ${updatedShipping.toLocaleString()}`, totalsBoxX + 62, totalsBoxY + 17, { align: 'right' });
     
     doc.setTextColor(...mutedText);
-    doc.text('VAT (5%):', totalsBoxX + 3, totalsBoxY + 24, { align: 'right' });
+    doc.text('VAT:', totalsBoxX + 3, totalsBoxY + 24, { align: 'right' });
     doc.setTextColor(...lightText);
     doc.text(`AED ${order.tax.toLocaleString()}`, totalsBoxX + 62, totalsBoxY + 24, { align: 'right' });
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -8,21 +8,31 @@ import HomeHighlightsSection from '@/components/sections/HomeHighlightsSection';
 import FeaturedSection from '@/components/sections/FeaturedSection';
 import FeaturesSection from '@/components/sections/FeaturesSection';
 import CategoriesSection from '@/components/sections/CategoriesSection';
+import FeaturedGamingPcsSection from '@/components/sections/FeaturedGamingPcsSection';
 import CategoryShowcaseSection from '@/components/sections/CategoryShowcaseSection';
 import FeaturedBlogsSection from '@/components/sections/FeaturedBlogsSection';
 import FaqSection from '@/components/sections/FaqSection';
-
-// One stacked section per category, mirroring the competitor's homepage layout.
-const CATEGORY_SHOWCASES = [
-  { title: 'Graphics Cards', matchTerms: ['gpu', 'graphics'], limit: 12 },
-  { title: 'Gaming Laptops', matchTerms: ['laptop'] },
-  { title: 'Monitors', matchTerms: ['monitor'] },
-  { title: 'Processors', matchTerms: ['cpu', 'processor'] },
-  { title: 'Keyboards', matchTerms: ['keyboard'] },
-  { title: 'Mice', matchTerms: ['mouse'] },
-];
+import { getPublicHomepageSections, type PublicHomepageSection } from '@/services/api';
 
 const Index: React.FC = () => {
+  // Admin-managed via /admin/homepage-sections — which categories show as a
+  // showcase row, their order, product count, and per-theme background color.
+  const [homepageSections, setHomepageSections] = useState<PublicHomepageSection[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getPublicHomepageSections().then((response) => {
+      if (!cancelled && response.success && response.data) {
+        setHomepageSections(response.data);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -32,19 +42,23 @@ const Index: React.FC = () => {
     >
       <Navbar />
       <CartDrawer />
-      
+
       <main>
         <HeroSection />
         <HomeHighlightsSection />
         <FeaturedSection />
+        <FeaturedGamingPcsSection />
         <CategoriesSection />
-        {CATEGORY_SHOWCASES.map((showcase, index) => (
+        {homepageSections.map((section) => (
           <CategoryShowcaseSection
-            key={showcase.title}
-            title={showcase.title}
-            matchTerms={showcase.matchTerms}
-            limit={showcase.limit}
-            tinted={index % 2 === 1}
+            key={section.id}
+            title={section.title}
+            categoryId={section.category_id}
+            categoryName={section.category_name}
+            limit={section.product_limit}
+            bgColorLight={section.bg_color_light}
+            bgColorDark={section.bg_color_dark}
+            image={section.image}
           />
         ))}
         <FeaturesSection />

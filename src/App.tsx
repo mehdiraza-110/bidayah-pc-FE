@@ -9,6 +9,7 @@ import { ThemeProvider } from "next-themes";
 import Index from "./pages/Index";
 import Products from "./pages/Products";
 import ProductDetail from "./pages/ProductDetail";
+import GamingPcDetail from "./pages/GamingPcDetail";
 import PCBuilder from "./pages/PCBuilder";
 import Checkout from "./pages/Checkout";
 import ThankYou from "./pages/ThankYou";
@@ -31,6 +32,8 @@ import AdminFilterRules from "./pages/AdminFilterRules";
 import AdminPCBuilderCategories from "./pages/AdminPCBuilderCategories";
 import AdminBuilderRules from "./pages/AdminBuilderRules";
 import AdminStoreLocations from "./pages/AdminStoreLocations";
+import AdminHomepageSections from "./pages/AdminHomepageSections";
+import AdminFeaturedGamingPcs from "./pages/AdminFeaturedGamingPcs";
 import AdminBlogs from "./pages/AdminBlogs";
 import Blog from "./pages/Blog";
 import BlogDetail from "./pages/BlogDetail";
@@ -64,6 +67,7 @@ const App = () => (
               <Route path="/products" element={<Products />} />
               <Route path="/product/:id" element={<ProductDetail />} />
               <Route path="/product/:id/:slug" element={<ProductDetail />} />
+              <Route path="/gaming-pc/:id" element={<GamingPcDetail />} />
               <Route path="/pc-builder" element={<PCBuilder />} />
               <Route path="/blog" element={<Blog />} />
               <Route path="/blog/:slug" element={<BlogDetail />} />
@@ -93,6 +97,8 @@ const App = () => (
               <Route path="/admin/settings" element={<AdminSettings />} />
               <Route path="/admin/store-locations" element={<AdminStoreLocations />} />
               <Route path="/admin/store-locations/:id" element={<AdminStoreLocations />} />
+              <Route path="/admin/homepage-sections" element={<AdminHomepageSections />} />
+              <Route path="/admin/featured-gaming-pcs" element={<AdminFeaturedGamingPcs />} />
               <Route path="/admin/blogs" element={<AdminBlogs />} />
               <Route path="/admin/blogs/:id" element={<AdminBlogs />} />
               <Route path="*" element={<NotFound />} />

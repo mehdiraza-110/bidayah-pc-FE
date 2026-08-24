@@ -216,7 +216,7 @@ const CheckoutPage: React.FC = () => {
 
   const subtotal = getTotalPrice();
   const shipping = 0; // Free shipping (automatically set by backend)
-  const tax = subtotal * 0.05; // 5% VAT (automatically calculated by backend)
+  const tax = 0; // VAT removed
   const total = subtotal + shipping + tax; // Estimated total (final calculated by backend)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -272,7 +272,7 @@ const CheckoutPage: React.FC = () => {
           billing_country: billingInfo.country,
           items: orderItems,
           // Note: shipping and tax are automatically calculated by backend
-          // shipping is always 0, tax is 5% VAT of subtotal
+          // shipping is always 0, tax/VAT has been removed
           payment_screenshot: paymentScreenshot,
         });
       } else {
@@ -297,7 +297,7 @@ const CheckoutPage: React.FC = () => {
           billing_country: billingInfo.country,
           items: orderItems,
           // Note: shipping and tax are automatically calculated by backend
-          // shipping is always 0, tax is 5% VAT of subtotal
+          // shipping is always 0, tax/VAT has been removed
         });
       }
 
@@ -907,13 +907,6 @@ const CheckoutPage: React.FC = () => {
                       <span className="text-muted-foreground">Subtotal</span>
                       <span className="font-mono-tech">AED {subtotal.toLocaleString()}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">VAT (5%)</span>
-                      <span className="font-mono-tech">AED {tax.toFixed(2)}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground italic">
-                      * Tax is automatically calculated by the system
-                    </p>
                     <div className="flex justify-between pt-3 border-t border-border">
                       <span className="font-orbitron text-lg font-bold">Total</span>
                       <span className="font-orbitron text-2xl font-bold text-primary">
