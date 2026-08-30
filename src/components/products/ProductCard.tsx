@@ -18,7 +18,7 @@ interface ProductCardProps {
 }
 
 // How often the image swaps while a card is hovered.
-const HOVER_CYCLE_MS = 700;
+const HOVER_CYCLE_MS = 2200;
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
@@ -159,6 +159,38 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
                 transition={{ duration: 0.25 }}
                 className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
               />
+
+              {/* Progress dots — one per gallery image, the active one fills up
+                  over HOVER_CYCLE_MS in sync with the swap above (Instagram-
+                  story style), so hovering shows how long until the next image. */}
+              {galleryImages.length > 1 && (
+                <div
+                  className={cn(
+                    'absolute bottom-1.5 sm:bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1 transition-opacity duration-300',
+                    isHovered ? 'opacity-100' : 'opacity-0'
+                  )}
+                >
+                  {galleryImages.map((_, dotIndex) => (
+                    <span
+                      key={dotIndex}
+                      className="relative h-1 w-4 sm:w-5 overflow-hidden rounded-full bg-white/40"
+                    >
+                      <motion.span
+                        className="absolute inset-y-0 left-0 rounded-full bg-primary"
+                        initial={false}
+                        animate={{
+                          width: dotIndex < imageIndex || (dotIndex === imageIndex && isHovered) ? '100%' : '0%',
+                        }}
+                        transition={
+                          dotIndex === imageIndex && isHovered
+                            ? { duration: HOVER_CYCLE_MS / 1000, ease: 'linear' }
+                            : { duration: 0.2 }
+                        }
+                      />
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Content */}

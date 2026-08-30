@@ -574,6 +574,16 @@ export interface FeaturedGamingPc {
   display_order: number;
   images: string[];
   products: FeaturedGamingPcProduct[];
+  // Optional PC Series placement — set series_type_id to make this build show
+  // up as a card on that series' landing page. tier_name groups color
+  // siblings of the "same" build together (e.g. "PLUS"); color_name/hex feed
+  // the color switcher. fps_score/fps_settings_label are manually entered.
+  series_type_id: string | null;
+  tier_name: string | null;
+  color_name: string | null;
+  color_swatch_hex: string | null;
+  fps_score: number | null;
+  fps_settings_label: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -592,6 +602,12 @@ export interface CreateFeaturedGamingPcRequest {
   /** At least 1 required, up to 5. */
   images: File[];
   products?: FeaturedGamingPcProductSelection[];
+  series_type_id?: string;
+  tier_name?: string;
+  color_name?: string;
+  color_swatch_hex?: string;
+  fps_score?: number | null;
+  fps_settings_label?: string;
 }
 
 export interface UpdateFeaturedGamingPcRequest {
@@ -604,6 +620,116 @@ export interface UpdateFeaturedGamingPcRequest {
   /** Omit to leave the existing gallery untouched; provide to fully replace it (still 1-5 images). */
   images?: File[];
   products?: FeaturedGamingPcProductSelection[];
+  /** Empty string clears the field (unassigns from its series type, etc). */
+  series_type_id?: string;
+  tier_name?: string;
+  color_name?: string;
+  color_swatch_hex?: string;
+  fps_score?: number | null;
+  fps_settings_label?: string;
+}
+
+// PC Series — prebuilt PC lines (e.g. "PLAY", "LUMEN"), 2 levels deep:
+// Series -> Series Type (e.g. "PLAY 1"). A type's actual purchasable builds
+// are just Featured Gaming PCs with series_type_id set to it — grouped by
+// tier_name and color-switched by color_name on the series landing page —
+// so builds are managed entirely from the Featured Gaming PCs module.
+export type PcSeriesBadgeStatus = 'in_stock' | 'made_to_order';
+
+export interface PcSeriesType {
+  id: string;
+  series_id: string;
+  name: string;
+  subtitle: string | null;
+  is_active: boolean;
+  display_order: number;
+  // Only populated on the deep-fetched series tree (GET /pc-series/:id, GET
+  // /pc-series/slug/:slug) — bare create/update responses omit this.
+  gaming_pcs?: FeaturedGamingPc[];
+  created_at: string;
+  updated_at: string;
+}
+
+// A series type in the flat cross-series list (GET /pc-series/types), used
+// to populate the "Series Type" picker on the Featured Gaming PC form.
+export interface PcSeriesTypeFlat extends PcSeriesType {
+  series_name: string;
+}
+
+export interface PcSeries {
+  id: string;
+  name: string;
+  slug: string;
+  action_button_text: string;
+  card_image: string | null;
+  hero_video: string | null;
+  badge_status: PcSeriesBadgeStatus;
+  // One or two short lines shown on the homepage card under the name — admin
+  // enters each line on its own row; render split by newline.
+  card_description: string | null;
+  // Overrides the computed price_from on the homepage card (e.g. for the
+  // "Build your own" card, which has no real builds to compute a price from).
+  starting_price: number | null;
+  // Paired with starting_price to show "from AED X to AED Y" on the homepage
+  // card instead of a single price. Ignored unless starting_price is set too.
+  ending_price: number | null;
+  // The pinned "Build your own" homepage card — at most one series may have
+  // this set. Always sorts last and links straight to the PC Builder instead
+  // of a series landing page.
+  is_custom_build: boolean;
+  is_active: boolean;
+  display_order: number;
+  // Computed from its types' active Featured Gaming PCs — present on list
+  // endpoints (getAll/getActiveOrdered).
+  price_from?: number | null;
+  price_to?: number | null;
+  types?: PcSeriesType[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePcSeriesRequest {
+  name: string;
+  action_button_text?: string;
+  badge_status?: PcSeriesBadgeStatus;
+  is_active?: boolean;
+  card_image?: File;
+  /** A plain URL (e.g. YouTube/Vimeo/CDN link) — not uploaded. */
+  hero_video?: string;
+  card_description?: string;
+  starting_price?: number;
+  ending_price?: number;
+  is_custom_build?: boolean;
+}
+
+export interface UpdatePcSeriesRequest {
+  name?: string;
+  action_button_text?: string;
+  badge_status?: PcSeriesBadgeStatus;
+  is_active?: boolean;
+  display_order?: number;
+  card_image?: File;
+  /** A plain URL (e.g. YouTube/Vimeo/CDN link) — not uploaded. */
+  hero_video?: string;
+  card_description?: string;
+  starting_price?: number | null;
+  ending_price?: number | null;
+  is_custom_build?: boolean;
+}
+
+export interface CreatePcSeriesTypeRequest {
+  series_id: string;
+  name: string;
+  subtitle?: string;
+  is_active?: boolean;
+  display_order?: number;
+}
+
+export interface UpdatePcSeriesTypeRequest {
+  name?: string;
+  subtitle?: string;
+  is_active?: boolean;
+  display_order?: number;
 }
 
 export interface PCBuilderPriorSelection {
@@ -1588,6 +1714,12 @@ export const createFeaturedGamingPc = async (
   if (data.key_features !== undefined) formData.append('key_features', JSON.stringify(data.key_features));
   if (data.is_active !== undefined) formData.append('is_active', String(data.is_active));
   if (data.products !== undefined) formData.append('products', JSON.stringify(data.products));
+  if (data.series_type_id !== undefined) formData.append('series_type_id', data.series_type_id);
+  if (data.tier_name !== undefined) formData.append('tier_name', data.tier_name);
+  if (data.color_name !== undefined) formData.append('color_name', data.color_name);
+  if (data.color_swatch_hex !== undefined) formData.append('color_swatch_hex', data.color_swatch_hex);
+  if (data.fps_score !== undefined) formData.append('fps_score', data.fps_score == null ? '' : String(data.fps_score));
+  if (data.fps_settings_label !== undefined) formData.append('fps_settings_label', data.fps_settings_label);
   data.images.forEach((file) => formData.append('images', file));
 
   return apiRequest<FeaturedGamingPc>(
@@ -1609,6 +1741,12 @@ export const updateFeaturedGamingPc = async (
   if (data.is_active !== undefined) formData.append('is_active', String(data.is_active));
   if (data.display_order !== undefined) formData.append('display_order', String(data.display_order));
   if (data.products !== undefined) formData.append('products', JSON.stringify(data.products));
+  if (data.series_type_id !== undefined) formData.append('series_type_id', data.series_type_id);
+  if (data.tier_name !== undefined) formData.append('tier_name', data.tier_name);
+  if (data.color_name !== undefined) formData.append('color_name', data.color_name);
+  if (data.color_swatch_hex !== undefined) formData.append('color_swatch_hex', data.color_swatch_hex);
+  if (data.fps_score !== undefined) formData.append('fps_score', data.fps_score === null ? '' : String(data.fps_score));
+  if (data.fps_settings_label !== undefined) formData.append('fps_settings_label', data.fps_settings_label);
   if (data.images !== undefined) data.images.forEach((file) => formData.append('images', file));
 
   return apiRequest<FeaturedGamingPc>(
@@ -1631,6 +1769,86 @@ export const reorderFeaturedGamingPcs = async (
     method: 'PUT',
     body: JSON.stringify({ gaming_pcs: gamingPcs }),
   });
+};
+
+// PC Series APIs (admin)
+export const getPcSeriesList = async (): Promise<ApiResponse<PcSeries[]>> => {
+  return apiRequest<PcSeries[]>('/pc-series', { method: 'GET' });
+};
+
+// Deep-fetched: includes the full types -> variants -> (components + colors) tree.
+export const getPcSeriesById = async (id: string): Promise<ApiResponse<PcSeries>> => {
+  return apiRequest<PcSeries>(`/pc-series/${id}`, { method: 'GET' });
+};
+
+export const createPcSeries = async (data: CreatePcSeriesRequest): Promise<ApiResponse<PcSeries>> => {
+  const formData = new FormData();
+  formData.append('name', data.name);
+  if (data.action_button_text !== undefined) formData.append('action_button_text', data.action_button_text);
+  if (data.badge_status !== undefined) formData.append('badge_status', data.badge_status);
+  if (data.is_active !== undefined) formData.append('is_active', String(data.is_active));
+  if (data.card_image) formData.append('card_image', data.card_image);
+  if (data.hero_video) formData.append('hero_video', data.hero_video);
+  if (data.card_description !== undefined) formData.append('card_description', data.card_description);
+  if (data.starting_price !== undefined) formData.append('starting_price', String(data.starting_price));
+  if (data.ending_price !== undefined) formData.append('ending_price', String(data.ending_price));
+  if (data.is_custom_build !== undefined) formData.append('is_custom_build', String(data.is_custom_build));
+
+  return apiRequest<PcSeries>('/pc-series', { method: 'POST', body: formData }, true);
+};
+
+export const updatePcSeries = async (id: string, data: UpdatePcSeriesRequest): Promise<ApiResponse<PcSeries>> => {
+  const formData = new FormData();
+  if (data.name !== undefined) formData.append('name', data.name);
+  if (data.action_button_text !== undefined) formData.append('action_button_text', data.action_button_text);
+  if (data.badge_status !== undefined) formData.append('badge_status', data.badge_status);
+  if (data.is_active !== undefined) formData.append('is_active', String(data.is_active));
+  if (data.display_order !== undefined) formData.append('display_order', String(data.display_order));
+  if (data.card_image) formData.append('card_image', data.card_image);
+  if (data.hero_video !== undefined) formData.append('hero_video', data.hero_video);
+  if (data.card_description !== undefined) formData.append('card_description', data.card_description);
+  if (data.starting_price !== undefined) formData.append('starting_price', data.starting_price === null ? '' : String(data.starting_price));
+  if (data.ending_price !== undefined) formData.append('ending_price', data.ending_price === null ? '' : String(data.ending_price));
+  if (data.is_custom_build !== undefined) formData.append('is_custom_build', String(data.is_custom_build));
+
+  return apiRequest<PcSeries>(`/pc-series/${id}`, { method: 'PUT', body: formData }, true);
+};
+
+export const deletePcSeries = async (id: string): Promise<ApiResponse<null>> => {
+  return apiRequest<null>(`/pc-series/${id}`, { method: 'DELETE' });
+};
+
+export const reorderPcSeries = async (
+  items: { id: string; display_order: number }[]
+): Promise<ApiResponse<PcSeries[]>> => {
+  return apiRequest<PcSeries[]>('/pc-series/reorder', { method: 'PUT', body: JSON.stringify({ items }) });
+};
+
+export const createPcSeriesType = async (data: CreatePcSeriesTypeRequest): Promise<ApiResponse<PcSeriesType>> => {
+  return apiRequest<PcSeriesType>('/pc-series/types', { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const updatePcSeriesType = async (
+  id: string,
+  data: UpdatePcSeriesTypeRequest
+): Promise<ApiResponse<PcSeriesType>> => {
+  return apiRequest<PcSeriesType>(`/pc-series/types/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+};
+
+export const deletePcSeriesType = async (id: string): Promise<ApiResponse<null>> => {
+  return apiRequest<null>(`/pc-series/types/${id}`, { method: 'DELETE' });
+};
+
+export const reorderPcSeriesTypes = async (
+  items: { id: string; display_order: number }[]
+): Promise<ApiResponse<null>> => {
+  return apiRequest<null>('/pc-series/types/reorder', { method: 'PUT', body: JSON.stringify({ items }) });
+};
+
+// Flat list of every series type across every series (with its parent series
+// name) — for the "Series Type" picker on the Featured Gaming PC form.
+export const getPcSeriesTypesFlat = async (): Promise<ApiResponse<PcSeriesTypeFlat[]>> => {
+  return apiRequest<PcSeriesTypeFlat[]>('/pc-series/types', { method: 'GET' });
 };
 
 // Public API functions (no authentication required)
@@ -1807,6 +2025,19 @@ export const getPublicFeaturedGamingPcBySlug = async (slug: string): Promise<Api
   return publicApiRequest<FeaturedGamingPc>(`/featured-gaming-pcs/slug/${slug}`, {
     method: 'GET',
   });
+};
+
+// Public PC Series APIs (homepage cards + series landing page). Individual
+// builds are fetched via the featured-gaming-pcs public APIs above (by their
+// own slug) — a series page just groups/links to them.
+export const getPublicPcSeriesList = async (): Promise<ApiResponse<PcSeries[]>> => {
+  return publicApiRequest<PcSeries[]>('/pc-series', { method: 'GET' });
+};
+
+// Full nested tree (active types + their assigned Featured Gaming PCs) —
+// for the series landing page.
+export const getPublicPcSeriesBySlug = async (slug: string): Promise<ApiResponse<PcSeries>> => {
+  return publicApiRequest<PcSeries>(`/pc-series/slug/${slug}`, { method: 'GET' });
 };
 
 // Public Blog APIs (published posts only — enforced server-side)

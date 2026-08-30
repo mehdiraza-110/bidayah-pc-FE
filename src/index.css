@@ -362,23 +362,29 @@
     backface-visibility: hidden;
   }
 
-  /* Custom scrollbar */
+  /* Custom scrollbar — thin and low-contrast everywhere, instead of a loud
+     site-wide gradient bar. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 5px;
+    height: 5px;
   }
 
   ::-webkit-scrollbar-track {
-    background: hsl(var(--background));
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, hsl(var(--neon-cyan)), hsl(var(--neon-purple)));
-    border-radius: 4px;
+    background: hsl(var(--border));
+    border-radius: 999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, hsl(var(--neon-cyan) / 0.8), hsl(var(--neon-purple) / 0.8));
+    background: hsl(var(--muted-foreground) / 0.5);
   }
 
   /* Fully hides the scrollbar for horizontally-scrollable rows (chips, carousels)

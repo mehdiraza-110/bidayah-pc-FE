@@ -19,6 +19,7 @@ import Footer from '@/components/layout/Footer';
 import CartDrawer from '@/components/layout/CartDrawer';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { ScoreRing } from '@/components/pc-series/ScoreRing';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { Product } from '@/data/products';
 import {
@@ -323,6 +324,13 @@ const GamingPcDetailPage: React.FC = () => {
               <h1 className="animate-item font-orbitron text-2xl md:text-3xl font-bold text-foreground mb-4">
                 {gamingPc.name}
               </h1>
+
+              {/* FPS score — only set when this build is assigned to a PC Series */}
+              {gamingPc.fps_score != null && (
+                <div className="animate-item mb-5">
+                  <ScoreRing score={gamingPc.fps_score} settingsLabel={gamingPc.fps_settings_label} />
+                </div>
+              )}
 
               {/* Key feature bullets */}
               {gamingPc.key_features.length > 0 && (

@@ -20,12 +20,14 @@ import {
   X,
   Minus,
   Plus,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { NeonCard } from '@/components/ui/NeonCard';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   getPublicPCBuilderOptions,
   getPublicPCBuilderProducts,
@@ -104,7 +106,11 @@ const PCBuilderPage: React.FC = () => {
   const [productsCategoryId, setProductsCategoryId] = useState('');
   const [productSearchInput, setProductSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // One entry per category card, so the left-hand quick-nav can scroll the
+  // page straight to a step instead of just toggling its accordion open.
+  const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const PRODUCTS_PAGE_SIZE = 20;
 
@@ -295,6 +301,9 @@ const PCBuilderPage: React.FC = () => {
     const existingIndex = current.findIndex(item => item.product.id === product.id);
     const inferredVendor = resolveProductVendor(product);
     const totalUnits = getSelectedUnitCount(current);
+    // Tracks whether this click actually added a unit (vs. deselecting one),
+    // so a multi-select category can auto-advance once it fills up too.
+    let didAddUnit = false;
 
     if (maxQuantity <= 1) {
       // Single-select category: picking a product replaces the current one.
@@ -313,6 +322,7 @@ const PCBuilderPage: React.FC = () => {
         ...prev,
         [categoryId]: current.map((item, i) => (i === existingIndex ? { ...item, quantity: item.quantity + 1 } : item)),
       }));
+      didAddUnit = true;
     } else if (existingIndex !== -1) {
       // Already selected, duplicates not allowed for this category: clicking it again deselects it.
       setSelectedProducts(prev => ({
@@ -327,6 +337,7 @@ const PCBuilderPage: React.FC = () => {
         ...prev,
         [categoryId]: [...current, { product, vendor: inferredVendor, quantity: 1 }],
       }));
+      didAddUnit = true;
     }
 
     // Only auto-apply the inferred vendor as a filter for categories that
@@ -341,9 +352,11 @@ const PCBuilderPage: React.FC = () => {
       }));
     }
 
-    // Auto-advance the accordion to the next incomplete step. For
-    // multi-select categories, stay open so the customer can keep adding.
-    if (maxQuantity <= 1) {
+    // Auto-advance the accordion to the next incomplete step: immediately for
+    // single-select categories, or once a multi-select category's just-added
+    // unit fills it up to its max. Deselecting/removing a unit never advances.
+    const isNowFull = maxQuantity > 1 && didAddUnit && totalUnits + 1 >= maxQuantity;
+    if (maxQuantity <= 1 || isNowFull) {
       const currentIndex = categories.findIndex(c => c.id === categoryId);
       const nextCategory = categories
         .slice(currentIndex + 1)
@@ -357,6 +370,14 @@ const PCBuilderPage: React.FC = () => {
 
   const toggleStep = (categoryId: string) => {
     setActiveCategoryId(prev => (prev === categoryId ? '' : categoryId));
+  };
+
+  // Quick-nav click: open that step and scroll it into view. Scrolling
+  // happens right away (the card itself is always rendered, open or not),
+  // `scroll-mt` on the card keeps it clear of the sticky navbar.
+  const handleJumpToCategory = (categoryId: string) => {
+    setActiveCategoryId(categoryId);
+    categoryRefs.current[categoryId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleSelectVendor = (vendor: Vendor | null) => {
@@ -491,9 +512,48 @@ const PCBuilderPage: React.FC = () => {
             )}
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Left Column - Step-by-step Component Selection */}
-            <div className="lg:col-span-2 space-y-3">
+          <div className="grid lg:grid-cols-12 gap-8">
+            {/* Quick-nav Sidebar - jump straight to any component section */}
+            {!isOptionsLoading && !optionsError && categories.length > 0 && (
+              <div className="hidden lg:block lg:col-span-2 min-w-0">
+                <div className="sticky top-32">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
+                    Components
+                  </p>
+                  <nav className="space-y-0.5">
+                    {categories.map((category, categoryIndex) => {
+                      const Icon = getCategoryIcon(category.category_name);
+                      const isComplete = (selectedProducts[category.id]?.length ?? 0) > 0;
+                      const isActive = activeCategoryId === category.id;
+
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onClick={() => handleJumpToCategory(category.id)}
+                          className={cn(
+                            "w-full min-w-0 flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-md border-l-2 text-left text-sm font-rajdhani transition-colors",
+                            isActive
+                              ? "border-primary bg-primary/10 text-primary font-semibold"
+                              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                          )}
+                        >
+                          {isComplete ? (
+                            <Check className="w-3.5 h-3.5 text-accent shrink-0" />
+                          ) : (
+                            <Icon className="w-3.5 h-3.5 shrink-0" />
+                          )}
+                          <span className="min-w-0 flex-1 truncate">{category.category_name}</span>
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </div>
+              </div>
+            )}
+
+            {/* Middle Column - Step-by-step Component Selection */}
+            <div className="lg:col-span-6 space-y-3">
               {isOptionsLoading ? (
                 <NeonCard className="p-6" glowColor="cyan" hover={false}>
                   <Loader label="Loading builder options..." />
@@ -523,8 +583,12 @@ const PCBuilderPage: React.FC = () => {
                   const isRefreshingProducts = isActive && isProductsLoading && hasFreshProducts && products.length > 0;
 
                   return (
-                    <NeonCard
+                    <div
                       key={category.id}
+                      ref={(el) => { categoryRefs.current[category.id] = el; }}
+                      className="scroll-mt-28"
+                    >
+                    <NeonCard
                       className={cn(
                         "overflow-hidden transition-colors",
                         isActive && "border-primary/60"
@@ -798,13 +862,14 @@ const PCBuilderPage: React.FC = () => {
                         )}
                       </AnimatePresence>
                     </NeonCard>
+                    </div>
                   );
                 })
               )}
             </div>
 
             {/* Right Column - Build Summary */}
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-4">
               <div className="sticky top-32">
                 <NeonCard className="p-6 bg-card/95 border-border" glowColor="cyan" hover={false}>
                   <div className="flex items-center gap-3 mb-6">
@@ -919,6 +984,19 @@ const PCBuilderPage: React.FC = () => {
                         AED {totalPrice.toLocaleString()}
                       </span>
                     </div>
+
+                    {totalPrice > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setIsSpecsModalOpen(true)}
+                        className="group w-full flex items-center justify-center gap-2 py-1 text-sm font-rajdhani font-semibold text-primary transition-all hover:[text-shadow:0_0_8px_hsl(var(--neon-cyan)/0.7)]"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span className="underline decoration-primary/40 group-hover:decoration-primary underline-offset-4">
+                          View Specs
+                        </span>
+                      </button>
+                    )}
                   </div>
 
                   {/* Build Status */}
@@ -985,6 +1063,79 @@ const PCBuilderPage: React.FC = () => {
           </div>
         </div>
       </main>
+
+      <Dialog open={isSpecsModalOpen} onOpenChange={setIsSpecsModalOpen}>
+        <DialogContent className="max-w-2xl w-[calc(100%-2rem)] gap-0 p-0 overflow-hidden bg-card border-primary/20">
+          <div className="px-6 sm:px-7 pt-6 pb-5 border-b border-border bg-gradient-to-b from-primary/[0.07] to-transparent">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-primary/10 rounded-lg shrink-0">
+                  <Settings className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <DialogTitle className="font-orbitron text-xl font-bold">Full Build Specs</DialogTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {categories.reduce((sum, category) => sum + getSelectedUnitCount(selectedProducts[category.id] || []), 0)} components selected
+                  </p>
+                </div>
+              </div>
+            </DialogHeader>
+          </div>
+
+          <div className="max-h-[55vh] overflow-y-auto px-6 sm:px-7">
+            <div className="divide-y divide-border/60">
+              {categories.map((category) => {
+                const items = selectedProducts[category.id] || [];
+                if (items.length === 0) return null;
+                const Icon = getCategoryIcon(category.category_name);
+
+                return (
+                  <div key={category.id} className="py-4">
+                    <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary/80 mb-3">
+                      <Icon className="w-3.5 h-3.5" />
+                      {category.category_name}
+                    </p>
+                    <div className="space-y-3">
+                      {items.map(({ product, vendor, quantity }) => (
+                        <div key={product.id} className="flex items-center gap-4">
+                          {product.image ? (
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              className="w-16 h-16 rounded-lg object-cover border border-border shrink-0 bg-muted"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-lg border border-border shrink-0 bg-muted flex items-center justify-center">
+                              <Icon className="w-6 h-6 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-rajdhani font-semibold text-sm leading-snug">
+                              {product.name}
+                              {quantity > 1 && <span className="text-muted-foreground font-normal"> ×{quantity}</span>}
+                            </p>
+                            {vendor && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{vendor.vendor_name}</p>
+                            )}
+                          </div>
+                          <span className="font-orbitron text-sm font-bold text-primary shrink-0">
+                            AED {(Number(product.price || 0) * quantity).toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="px-6 sm:px-7 py-5 border-t border-border bg-muted/20 flex items-center justify-between">
+            <span className="font-orbitron text-base font-bold">Total</span>
+            <span className="font-orbitron text-2xl font-bold text-primary">AED {totalPrice.toLocaleString()}</span>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </motion.div>

@@ -8,7 +8,7 @@ import HomeHighlightsSection from '@/components/sections/HomeHighlightsSection';
 import FeaturedSection from '@/components/sections/FeaturedSection';
 import FeaturesSection from '@/components/sections/FeaturesSection';
 import CategoriesSection from '@/components/sections/CategoriesSection';
-import FeaturedGamingPcsSection from '@/components/sections/FeaturedGamingPcsSection';
+import PcSeriesSection from '@/components/sections/PcSeriesSection';
 import CategoryShowcaseSection from '@/components/sections/CategoryShowcaseSection';
 import FeaturedBlogsSection from '@/components/sections/FeaturedBlogsSection';
 import FaqSection from '@/components/sections/FaqSection';
@@ -47,7 +47,7 @@ const Index: React.FC = () => {
         <HeroSection />
         <HomeHighlightsSection />
         <FeaturedSection />
-        <FeaturedGamingPcsSection />
+        <PcSeriesSection />
         <CategoriesSection />
         {homepageSections.map((section) => (
           <CategoryShowcaseSection

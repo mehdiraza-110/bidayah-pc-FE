@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   getFeaturedGamingPcs,
   createFeaturedGamingPc,
@@ -31,10 +32,10 @@ import {
   deleteFeaturedGamingPc,
   reorderFeaturedGamingPcs,
   getProducts,
-  getSiteSettings,
-  updateSiteSettings,
+  getPcSeriesTypesFlat,
   type FeaturedGamingPc,
   type Product,
+  type PcSeriesTypeFlat,
 } from '@/services/api';
 
 const MAX_IMAGES = 5;
@@ -59,6 +60,14 @@ interface FormState {
   isActive: boolean;
   keyFeatures: string[];
   selectedProducts: SelectedProductEntry[];
+  // Optional PC Series placement — see the "Series placement" section of the
+  // form for what each of these does.
+  seriesTypeId: string;
+  tierName: string;
+  colorName: string;
+  colorSwatchHex: string;
+  fpsScore: string;
+  fpsSettingsLabel: string;
 }
 
 const emptyForm: FormState = {
@@ -68,6 +77,12 @@ const emptyForm: FormState = {
   isActive: true,
   keyFeatures: [],
   selectedProducts: [],
+  seriesTypeId: '',
+  tierName: '',
+  colorName: '',
+  colorSwatchHex: '#1a1a1a',
+  fpsScore: '',
+  fpsSettingsLabel: '',
 };
 
 const AdminFeaturedGamingPcsPage: React.FC = () => {
@@ -91,9 +106,7 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
   const [productResults, setProductResults] = useState<Product[]>([]);
   const [isSearchingProducts, setIsSearchingProducts] = useState(false);
 
-  const [homepageLimit, setHomepageLimit] = useState(4);
-  const [isSavingLimit, setIsSavingLimit] = useState(false);
-  const [limitDirty, setLimitDirty] = useState(false);
+  const [seriesTypes, setSeriesTypes] = useState<PcSeriesTypeFlat[]>([]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -124,10 +137,8 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
   useEffect(() => {
     loadGamingPcs();
 
-    getSiteSettings().then((response) => {
-      if (response.success && response.data?.featured_gaming_pcs_limit !== undefined) {
-        setHomepageLimit(response.data.featured_gaming_pcs_limit);
-      }
+    getPcSeriesTypesFlat().then((response) => {
+      if (response.success && response.data) setSeriesTypes(response.data);
     });
   }, []);
 
@@ -187,6 +198,12 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
         },
         quantity: p.quantity,
       })),
+      seriesTypeId: gamingPc.series_type_id || '',
+      tierName: gamingPc.tier_name || '',
+      colorName: gamingPc.color_name || '',
+      colorSwatchHex: gamingPc.color_swatch_hex || '#1a1a1a',
+      fpsScore: gamingPc.fps_score != null ? String(gamingPc.fps_score) : '',
+      fpsSettingsLabel: gamingPc.fps_settings_label || '',
     });
     setImageFiles([]);
     setImagePreviews([]);
@@ -301,6 +318,17 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
       quantity,
     }));
 
+    // Empty string clears the field on the backend (unassigns series
+    // placement) — sent as-is either way, never omitted.
+    const seriesFields = {
+      series_type_id: form.seriesTypeId,
+      tier_name: form.tierName.trim(),
+      color_name: form.colorName.trim(),
+      color_swatch_hex: form.colorName.trim() ? form.colorSwatchHex : '',
+      fps_score: form.fpsScore.trim() ? Number(form.fpsScore) : null,
+      fps_settings_label: form.fpsSettingsLabel.trim(),
+    };
+
     if (editingId) {
       const response = await updateFeaturedGamingPc(editingId, {
         name: form.name.trim(),
@@ -310,6 +338,7 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
         is_active: form.isActive,
         products,
         images: imageFiles.length > 0 ? imageFiles : undefined,
+        ...seriesFields,
       });
 
       if (response.success) {
@@ -329,6 +358,7 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
         is_active: form.isActive,
         products,
         images: imageFiles,
+        ...seriesFields,
       });
 
       if (response.success) {
@@ -385,18 +415,6 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
     setIsReordering(false);
   };
 
-  const handleSaveLimit = async () => {
-    setIsSavingLimit(true);
-    const response = await updateSiteSettings({ featured_gaming_pcs_limit: homepageLimit });
-    if (response.success) {
-      toast.success('Homepage display limit updated');
-      setLimitDirty(false);
-    } else {
-      toast.error(response.message || 'Failed to update limit');
-    }
-    setIsSavingLimit(false);
-  };
-
   return (
     <AdminLayout>
       <div className="p-6" ref={containerRef}>
@@ -418,35 +436,6 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
             )}
           </div>
         </div>
-
-        {!isFormOpen && (
-          <NeonCard className="p-5 mb-6" glowColor="purple" hover={false}>
-            <div className="flex flex-wrap items-end gap-4">
-              <div>
-                <Label htmlFor="homepage-limit">Homepage display limit</Label>
-                <p className="text-xs text-muted-foreground mb-2 max-w-sm">
-                  How many active builds show on the homepage, in the order below.
-                </p>
-                <Input
-                  id="homepage-limit"
-                  type="number"
-                  min={0}
-                  max={50}
-                  value={homepageLimit}
-                  onChange={(e) => {
-                    setHomepageLimit(Math.max(0, Math.min(50, Number(e.target.value) || 0)));
-                    setLimitDirty(true);
-                  }}
-                  className="w-28"
-                />
-              </div>
-              <CyberButton size="sm" onClick={handleSaveLimit} disabled={!limitDirty || isSavingLimit}>
-                {isSavingLimit ? <Loader size="sm" /> : <Save className="w-4 h-4 mr-2" />}
-                SAVE
-              </CyberButton>
-            </div>
-          </NeonCard>
-        )}
 
         <AnimatePresence mode="wait">
           {isFormOpen ? (
@@ -662,6 +651,99 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
                     ) : productSearch.trim() ? (
                       <p className="mt-2 text-xs text-muted-foreground">No products found.</p>
                     ) : null}
+                  </div>
+
+                  {/* PC Series placement */}
+                  <div className="rounded-lg border border-border p-4 space-y-4">
+                    <div>
+                      <Label htmlFor="gp-series-type">Series placement</Label>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Optional — assign this build to a Series Type (e.g. "PLAY 1") to show it as a card on that
+                        series' landing page. Manage the series itself under PC Series in the sidebar.
+                      </p>
+                      <Select
+                        value={form.seriesTypeId || 'none'}
+                        onValueChange={(value) => setForm((prev) => ({ ...prev, seriesTypeId: value === 'none' ? '' : value }))}
+                      >
+                        <SelectTrigger id="gp-series-type" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Not part of a series</SelectItem>
+                          {seriesTypes.map((type) => (
+                            <SelectItem key={type.id} value={type.id}>
+                              {type.series_name} — {type.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {form.seriesTypeId && (
+                      <>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <Label htmlFor="gp-tier-name">Tier name</Label>
+                            <p className="text-xs text-muted-foreground mb-2">
+                              Groups color siblings of the "same" build together (e.g. "PLUS"). Leave blank if this
+                              build has no color variants.
+                            </p>
+                            <Input
+                              id="gp-tier-name"
+                              value={form.tierName}
+                              onChange={(e) => setForm((prev) => ({ ...prev, tierName: e.target.value }))}
+                              placeholder="e.g. PLUS"
+                            />
+                          </div>
+                          <div className="grid grid-cols-[1fr_auto] gap-3">
+                            <div>
+                              <Label htmlFor="gp-color-name">Color name</Label>
+                              <Input
+                                id="gp-color-name"
+                                value={form.colorName}
+                                onChange={(e) => setForm((prev) => ({ ...prev, colorName: e.target.value }))}
+                                placeholder="e.g. Black"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="gp-color-swatch">Swatch</Label>
+                              <input
+                                id="gp-color-swatch"
+                                type="color"
+                                value={form.colorSwatchHex}
+                                onChange={(e) => setForm((prev) => ({ ...prev, colorSwatchHex: e.target.value }))}
+                                className="h-10 w-14 rounded-md border border-border bg-transparent p-1"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <Label htmlFor="gp-fps-score">FPS score</Label>
+                            <p className="text-xs text-muted-foreground mb-2">Manually entered — no automated benchmarking.</p>
+                            <Input
+                              id="gp-fps-score"
+                              type="number"
+                              min={0}
+                              value={form.fpsScore}
+                              onChange={(e) => setForm((prev) => ({ ...prev, fpsScore: e.target.value }))}
+                              placeholder="84"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="gp-fps-label">Settings label</Label>
+                            <p className="text-xs text-muted-foreground mb-2">e.g. "Ultra settings".</p>
+                            <Input
+                              id="gp-fps-label"
+                              value={form.fpsSettingsLabel}
+                              onChange={(e) => setForm((prev) => ({ ...prev, fpsSettingsLabel: e.target.value }))}
+                              placeholder="Ultra settings"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">

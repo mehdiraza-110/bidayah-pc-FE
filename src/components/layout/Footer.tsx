@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Mail, MapPin } from 'lucide-react';
 import { getPublicCategories, type Category } from '@/services/api';
 import { TwitterIcon, InstagramIcon, YouTubeIcon, TwitchIcon } from '@/components/icons/SocialIcons';
+import { sortByCategoryPriority } from '@/lib/categoryPriority';
 
 const Footer: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -23,8 +24,12 @@ const Footer: React.FC = () => {
     loadCategories();
   }, []);
 
-  // Convert categories to footer links format (limit to top 5 to keep footer compact)
-  const productLinks = categories.slice(0, 5).map(category => ({
+  // Convert categories to footer links format — core PC-build components
+  // first (CPU, GPU, Motherboard, ...), same priority order used elsewhere
+  // (homepage tabs, product filters), so unrelated/miscellaneous categories
+  // never crowd out the ones customers actually expect here. Limited to top
+  // 5 to keep the footer compact.
+  const productLinks = sortByCategoryPriority(categories).slice(0, 5).map(category => ({
     name: category.category_name,
     path: `/products?category_id=${category.id}`,
   }));
@@ -43,9 +48,6 @@ const Footer: React.FC = () => {
       { name: 'Careers', path: '#' },
       { name: 'Press', path: '#' },
       { name: 'Partners', path: '#' },
-    ],
-    admin: [
-      { name: 'Admin Panel', path: '/admin/login' },
     ],
   };
 
@@ -68,7 +70,7 @@ const Footer: React.FC = () => {
       </div>
 
       <div className="container mx-auto px-4 py-16">
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-10 lg:gap-12">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-10 lg:gap-12">
           {/* Brand */}
           <div className="col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-6">

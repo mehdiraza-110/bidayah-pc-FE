@@ -23,6 +23,7 @@ import {
   Newspaper,
   LayoutGrid,
   Gamepad2,
+  Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GridBackground } from '@/components/effects/GridBackground';
@@ -78,6 +79,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       name: 'Featured Gaming PCs',
       path: '/admin/featured-gaming-pcs',
       icon: Gamepad2,
+    },
+    {
+      name: 'PC Series',
+      path: '/admin/pc-series',
+      icon: Layers,
     },
     {
       name: 'Orders',

@@ -1,16 +1,20 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 import { useNavigate } from 'react-router-dom';
-import { X, Minus, Plus, Trash2, ShoppingBag } from 'lucide-react';
+import { X, Minus, Plus, Trash2, ShoppingBag, ChevronDown } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { CyberButton } from '@/components/ui/CyberButton';
+import { cn } from '@/lib/utils';
 
 const CartDrawer: React.FC = () => {
   const { items, isOpen, closeCart, updateQuantity, removeItem, getTotalPrice } = useCartStore();
   const navigate = useNavigate();
   const drawerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  // Which line items have their component breakdown (specs) expanded —
+  // collapsed by default so a multi-component bundle doesn't dominate the drawer.
+  const [expandedItemIds, setExpandedItemIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (isOpen && drawerRef.current) {
@@ -79,56 +83,96 @@ const CartDrawer: React.FC = () => {
                 </div>
               ) : (
                 <AnimatePresence>
-                  {items.map((item, index) => (
+                  {items.map((item, index) => {
+                    const hasSpecs = item.specs && item.specs.length > 0;
+                    const isExpanded = expandedItemIds.has(item.id);
+
+                    return (
                     <motion.div
                       key={item.id}
                       initial={{ opacity: 0, x: 50 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -50, height: 0 }}
                       transition={{ delay: index * 0.05 }}
-                      className="flex gap-4 p-4 bg-muted/30 rounded-lg border border-border hover:border-primary/30 transition-colors"
+                      className="p-4 bg-muted/30 rounded-lg border border-border hover:border-primary/30 transition-colors"
                     >
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-20 h-20 object-cover rounded-md"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-rajdhani font-semibold text-sm truncate">
-                          {item.name}
-                        </h3>
-                        <p className="text-primary font-orbitron text-lg">
-                          AED {item.price.toLocaleString()}
-                        </p>
-                        
-                        {/* Quantity controls */}
-                        <div className="flex items-center gap-2 mt-2">
-                          <motion.button
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            className="w-7 h-7 rounded bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-primary/20 transition-colors"
-                            whileTap={{ scale: 0.9 }}
-                          >
-                            <Minus className="w-4 h-4" />
-                          </motion.button>
-                          <span className="font-mono-tech w-8 text-center">{item.quantity}</span>
-                          <motion.button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            className="w-7 h-7 rounded bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-primary/20 transition-colors"
-                            whileTap={{ scale: 0.9 }}
-                          >
-                            <Plus className="w-4 h-4" />
-                          </motion.button>
-                          <motion.button
-                            onClick={() => removeItem(item.id)}
-                            className="ml-auto w-7 h-7 rounded bg-destructive/20 flex items-center justify-center text-destructive hover:bg-destructive/30 transition-colors"
-                            whileTap={{ scale: 0.9 }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </motion.button>
+                      <div className="flex gap-4">
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-20 h-20 object-cover rounded-md"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-rajdhani font-semibold text-sm truncate">
+                            {item.name}
+                          </h3>
+                          <p className="text-primary font-orbitron text-lg">
+                            AED {item.price.toLocaleString()}
+                          </p>
+
+                          {/* Quantity controls */}
+                          <div className="flex items-center gap-2 mt-2">
+                            <motion.button
+                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                              className="w-7 h-7 rounded bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-primary/20 transition-colors"
+                              whileTap={{ scale: 0.9 }}
+                            >
+                              <Minus className="w-4 h-4" />
+                            </motion.button>
+                            <span className="font-mono-tech w-8 text-center">{item.quantity}</span>
+                            <motion.button
+                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              className="w-7 h-7 rounded bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-primary/20 transition-colors"
+                              whileTap={{ scale: 0.9 }}
+                            >
+                              <Plus className="w-4 h-4" />
+                            </motion.button>
+                            <motion.button
+                              onClick={() => removeItem(item.id)}
+                              className="ml-auto w-7 h-7 rounded bg-destructive/20 flex items-center justify-center text-destructive hover:bg-destructive/30 transition-colors"
+                              whileTap={{ scale: 0.9 }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </motion.button>
+                          </div>
                         </div>
                       </div>
+
+                      {hasSpecs && (
+                        <div className="mt-3 pt-3 border-t border-border/60">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedItemIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(item.id)) {
+                                  next.delete(item.id);
+                                } else {
+                                  next.add(item.id);
+                                }
+                                return next;
+                              })
+                            }
+                            className="flex w-full items-center justify-between gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                          >
+                            <span>{isExpanded ? 'Hide components' : `View components (${item.specs!.length})`}</span>
+                            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform shrink-0', isExpanded && 'rotate-180')} />
+                          </button>
+
+                          {isExpanded && (
+                            <ul className="mt-2 space-y-1">
+                              {item.specs!.map((spec, specIndex) => (
+                                <li key={specIndex} className="text-xs text-muted-foreground truncate">
+                                  {spec}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
                     </motion.div>
-                  ))}
+                    );
+                  })}
                 </AnimatePresence>
               )}
             </div>

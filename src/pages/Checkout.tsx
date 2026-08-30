@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 import {
   ChevronLeft,
+  ChevronDown,
   CreditCard,
   Lock,
   Truck,
@@ -70,6 +71,10 @@ const CheckoutPage: React.FC = () => {
   const [paymentScreenshotPreview, setPaymentScreenshotPreview] = useState<string | null>(null);
   const [isLoadingBilling, setIsLoadingBilling] = useState(true);
   const [isOrderSubmitted, setIsOrderSubmitted] = useState(false);
+  // Which order-summary line items have their component breakdown (specs)
+  // expanded — collapsed by default so a multi-component bundle doesn't
+  // dominate the summary panel.
+  const [expandedItemIds, setExpandedItemIds] = useState<Set<string>>(new Set());
   
   const containerRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -872,32 +877,72 @@ const CheckoutPage: React.FC = () => {
                   {/* Items List */}
                   <div className="space-y-4 mb-6 max-h-64 overflow-y-auto">
                     <AnimatePresence>
-                      {items.map((item, index) => (
-                        <motion.div
-                          key={item.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          className="flex gap-3 p-3 bg-muted/30 rounded-lg"
-                        >
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="w-16 h-16 object-cover rounded-md"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-rajdhani font-semibold text-sm truncate">
-                              {item.name}
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                              Qty: {item.quantity}
-                            </p>
-                            <p className="text-primary font-orbitron text-sm mt-1">
-                              AED {(item.price * item.quantity).toLocaleString()}
-                            </p>
-                          </div>
-                        </motion.div>
-                      ))}
+                      {items.map((item, index) => {
+                        const hasSpecs = item.specs && item.specs.length > 0;
+                        const isExpanded = expandedItemIds.has(item.id);
+
+                        return (
+                          <motion.div
+                            key={item.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                            className="p-3 bg-muted/30 rounded-lg"
+                          >
+                            <div className="flex gap-3">
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className="w-16 h-16 object-cover rounded-md"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-rajdhani font-semibold text-sm truncate">
+                                  {item.name}
+                                </h3>
+                                <p className="text-xs text-muted-foreground">
+                                  Qty: {item.quantity}
+                                </p>
+                                <p className="text-primary font-orbitron text-sm mt-1">
+                                  AED {(item.price * item.quantity).toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+
+                            {hasSpecs && (
+                              <div className="mt-2 pt-2 border-t border-border/60">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedItemIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(item.id)) {
+                                        next.delete(item.id);
+                                      } else {
+                                        next.add(item.id);
+                                      }
+                                      return next;
+                                    })
+                                  }
+                                  className="flex w-full items-center justify-between gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                                >
+                                  <span>{isExpanded ? 'Hide components' : `View components (${item.specs!.length})`}</span>
+                                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform shrink-0', isExpanded && 'rotate-180')} />
+                                </button>
+
+                                {isExpanded && (
+                                  <ul className="mt-2 space-y-1">
+                                    {item.specs!.map((spec, specIndex) => (
+                                      <li key={specIndex} className="text-xs text-muted-foreground truncate">
+                                        {spec}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            )}
+                          </motion.div>
+                        );
+                      })}
                     </AnimatePresence>
                   </div>
 
