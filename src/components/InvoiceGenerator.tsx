@@ -36,7 +36,7 @@ const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, open, onOpen
   React.useEffect(() => {
     if (order && open) {
       // Pre-fill customer details from shipping info
-      setCustomerName(`${order.shipping_info.first_name} ${order.shipping_info.last_name}`);
+      setCustomerName(`${order.shipping_info.first_name} ${order.shipping_info.last_name}`.trim());
       setCustomerEmail(order.shipping_info.email);
       setCustomerPhone(order.shipping_info.phone);
       setCustomerAddress(order.shipping_info.address);
@@ -168,7 +168,7 @@ const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, open, onOpen
     doc.setFont('helvetica', 'bold');
     doc.text('Subtotal:', orderBoxX + 3, yPos + 35);
     doc.setFontSize(10);
-    doc.text(`AED ${order.subtotal.toLocaleString()}`, orderBoxX + 3, yPos + 42);
+    doc.text(`AED ${Number(order.subtotal).toLocaleString()}`, orderBoxX + 3, yPos + 42);
     doc.setFontSize(8);
     doc.setTextColor(...mutedText);
     doc.text('+ Shipping & Tax', orderBoxX + 3, yPos + 49);
@@ -220,11 +220,11 @@ const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, open, onOpen
       
       doc.setTextColor(...mutedText);
       doc.text(item.quantity.toString(), margin + 105, yPos);
-      doc.text(`AED ${item.price.toLocaleString()}`, margin + 135, yPos);
-      
+      doc.text(`AED ${Number(item.price).toLocaleString()}`, margin + 135, yPos);
+
       doc.setTextColor(...neonCyan);
       doc.setFont('helvetica', 'bold');
-      doc.text(`AED ${item.subtotal.toLocaleString()}`, pageWidth - margin - 3, yPos, { align: 'right' });
+      doc.text(`AED ${Number(item.subtotal).toLocaleString()}`, pageWidth - margin - 3, yPos, { align: 'right' });
       
       yPos += 8;
       itemIndex++;
@@ -252,11 +252,11 @@ const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, open, onOpen
     doc.setFont('helvetica', 'normal');
     doc.text('Subtotal:', totalsBoxX + 3, totalsBoxY + 10, { align: 'right' });
     doc.setTextColor(...lightText);
-    doc.text(`AED ${order.subtotal.toLocaleString()}`, totalsBoxX + 62, totalsBoxY + 10, { align: 'right' });
-    
+    doc.text(`AED ${Number(order.subtotal).toLocaleString()}`, totalsBoxX + 62, totalsBoxY + 10, { align: 'right' });
+
     // Calculate total with updated shipping
     const updatedShipping = shippingCharges || 0;
-    const updatedTotal = order.subtotal + updatedShipping + order.tax;
+    const updatedTotal = Number(order.subtotal) + updatedShipping + Number(order.tax);
 
     doc.setTextColor(...mutedText);
     doc.text('Shipping:', totalsBoxX + 3, totalsBoxY + 17, { align: 'right' });
@@ -266,7 +266,7 @@ const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, open, onOpen
     doc.setTextColor(...mutedText);
     doc.text('VAT:', totalsBoxX + 3, totalsBoxY + 24, { align: 'right' });
     doc.setTextColor(...lightText);
-    doc.text(`AED ${order.tax.toLocaleString()}`, totalsBoxX + 62, totalsBoxY + 24, { align: 'right' });
+    doc.text(`AED ${Number(order.tax).toLocaleString()}`, totalsBoxX + 62, totalsBoxY + 24, { align: 'right' });
 
     // Decorative line
     doc.setDrawColor(...neonCyan);
@@ -480,9 +480,9 @@ const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, open, onOpen
                         )}
                       </td>
                       <td className="p-3 text-center">{item.quantity}</td>
-                      <td className="p-3 text-right">AED {item.price.toLocaleString()}</td>
+                      <td className="p-3 text-right">AED {Number(item.price).toLocaleString()}</td>
                       <td className="p-3 text-right font-semibold">
-                        AED {item.subtotal.toLocaleString()}
+                        AED {Number(item.subtotal).toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -493,7 +493,7 @@ const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, open, onOpen
                       Subtotal:
                     </td>
                     <td className="p-3 text-right font-semibold">
-                      AED {order.subtotal.toLocaleString()}
+                      AED {Number(order.subtotal).toLocaleString()}
                     </td>
                   </tr>
                     <tr>
@@ -506,14 +506,14 @@ const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, open, onOpen
                       <td colSpan={3} className="p-3 text-right">
                         Tax:
                       </td>
-                      <td className="p-3 text-right">AED {order.tax.toLocaleString()}</td>
+                      <td className="p-3 text-right">AED {Number(order.tax).toLocaleString()}</td>
                     </tr>
                     <tr className="border-t-2">
                       <td colSpan={3} className="p-3 text-right font-orbitron font-bold text-lg">
                         Total:
                       </td>
                       <td className="p-3 text-right font-orbitron font-bold text-lg text-primary">
-                        AED {(order.subtotal + shippingCharges + order.tax).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        AED {(Number(order.subtotal) + shippingCharges + Number(order.tax)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                 </tfoot>

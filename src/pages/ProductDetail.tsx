@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
@@ -12,7 +12,6 @@ import {
   Minus,
   Plus,
   Eye,
-  Scale,
   Truck,
   MapPin,
 } from 'lucide-react';
@@ -35,13 +34,13 @@ import { mapApiProductToLocal } from '@/lib/mapProduct';
 import { isUuid, productUrl } from '@/lib/slug';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
-import { useCompareStore } from '@/store/compareStore';
 import { ProductCarousel } from '@/components/products/ProductCarousel';
 import { Loader } from '@/components/ui/Loader';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const LOW_STOCK_THRESHOLD = 5;
+const RELATED_PAGE_SIZE = 8;
 
 const sanitizeRichText = (html?: string) => {
   if (!html || typeof window === 'undefined') return '';
@@ -73,6 +72,10 @@ const ProductDetailPage: React.FC = () => {
   const [product, setProduct] = useState<Product | null>(null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [relatedPage, setRelatedPage] = useState(1);
+  const [hasMoreRelated, setHasMoreRelated] = useState(false);
+  const [isLoadingMoreRelated, setIsLoadingMoreRelated] = useState(false);
+  const loadingMoreRelatedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [isImageZoomed, setIsImageZoomed] = useState(false);
@@ -83,8 +86,6 @@ const ProductDetailPage: React.FC = () => {
   const { addItem, openCart } = useCartStore();
   const isWishlisted = useWishlistStore((state) => (product ? state.isWishlisted(product.id) : false));
   const toggleWishlist = useWishlistStore((state) => state.toggleItem);
-  const isCompared = useCompareStore((state) => (product ? state.isCompared(product.id) : false));
-  const toggleCompare = useCompareStore((state) => state.toggleItem);
   const imageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -118,16 +119,23 @@ const ProductDetailPage: React.FC = () => {
           }
 
           // Load related products from the same category
+          setRelatedProducts([]);
+          setRelatedPage(1);
+          setHasMoreRelated(false);
           if (response.data.category_id) {
             const relatedResponse = await getPublicProducts({
               category_id: response.data.category_id,
+              page: 1,
+              limit: RELATED_PAGE_SIZE,
             });
             if (relatedResponse.success && relatedResponse.data) {
               const mappedRelated = relatedResponse.data
                 .filter(p => p.id !== mappedProduct.id)
-                .slice(0, 4)
                 .map(mapApiProductToLocal);
               setRelatedProducts(mappedRelated);
+              setHasMoreRelated(
+                !!relatedResponse.pagination && relatedResponse.pagination.page < relatedResponse.pagination.totalPages
+              );
             }
           }
         } else {
@@ -143,6 +151,37 @@ const ProductDetailPage: React.FC = () => {
 
     loadProduct();
   }, [id, slug]);
+
+  const loadMoreRelated = useCallback(async () => {
+    if (loadingMoreRelatedRef.current || !hasMoreRelated || !categoryId || !product) return;
+    loadingMoreRelatedRef.current = true;
+    setIsLoadingMoreRelated(true);
+
+    try {
+      const nextPage = relatedPage + 1;
+      const response = await getPublicProducts({
+        category_id: categoryId,
+        page: nextPage,
+        limit: RELATED_PAGE_SIZE,
+      });
+
+      if (response.success && response.data) {
+        const mappedRelated = response.data
+          .filter((p) => p.id !== product.id)
+          .map(mapApiProductToLocal);
+        setRelatedProducts((prev) => [...prev, ...mappedRelated]);
+        setRelatedPage(nextPage);
+        setHasMoreRelated(!!response.pagination && response.pagination.page < response.pagination.totalPages);
+      } else {
+        setHasMoreRelated(false);
+      }
+    } catch (error) {
+      console.error('Error loading more related products:', error);
+    } finally {
+      loadingMoreRelatedRef.current = false;
+      setIsLoadingMoreRelated(false);
+    }
+  }, [categoryId, hasMoreRelated, product, relatedPage]);
 
   // Site-wide config: WhatsApp contact number + admin-managed pickup locations
   useEffect(() => {
@@ -199,14 +238,6 @@ const ProductDetailPage: React.FC = () => {
     if (!product) return;
     const added = toggleWishlist(product);
     toast.success(added ? 'Added to wishlist' : 'Removed from wishlist');
-  };
-
-  const handleToggleCompare = () => {
-    if (!product) return;
-    const result = toggleCompare(product);
-    if (result === 'added') toast.success('Added to compare');
-    else if (result === 'removed') toast.success('Removed from compare');
-    else toast.error('You can compare up to 4 products at a time');
   };
 
   const handleShare = async () => {
@@ -471,6 +502,10 @@ const ProductDetailPage: React.FC = () => {
               </div>
 
               <div className="space-y-8">
+                <p className="animate-item text-sm font-semibold text-destructive">
+                  The price is not final. Our team will send you a pricing quotation after order placement.
+                </p>
+
                 {/* Quantity, Add to Cart & Buy Now — only if in stock */}
                 {product.in_stock !== false && (
                   <div className="animate-item flex flex-col sm:flex-row gap-3">
@@ -500,7 +535,7 @@ const ProductDetailPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleBuyNow}
-                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-border bg-black px-8 py-4 text-base font-orbitron font-semibold uppercase tracking-wider text-white transition-colors hover:bg-black/85"
+                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-border bg-black px-8 py-4 text-base font-orbitron font-semibold uppercase tracking-wider text-white transition-colors hover:bg-black/85 hover:border-primary"
                     >
                       Buy Now
                     </button>
@@ -523,19 +558,8 @@ const ProductDetailPage: React.FC = () => {
                   </a>
                 )}
 
-                {/* Compare / Wishlist / Share */}
+                {/* Wishlist / Share */}
                 <div className="animate-item flex flex-wrap items-center gap-6 border-t border-border pt-6 text-sm">
-                  <button
-                    type="button"
-                    onClick={handleToggleCompare}
-                    className={cn(
-                      "flex items-center gap-2 transition-colors",
-                      isCompared ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <Scale className="w-4 h-4" />
-                    {isCompared ? 'Added to Compare' : 'Compare'}
-                  </button>
                   <button
                     type="button"
                     onClick={handleToggleWishlist}
@@ -588,7 +612,7 @@ const ProductDetailPage: React.FC = () => {
                       <Truck className="w-5 h-5 text-primary shrink-0" />
                       <div className="text-sm">
                         <p className="font-semibold text-foreground">Courier delivery</p>
-                        <p className="text-muted-foreground">Delivered in 2-3 business days</p>
+                        <p className="text-muted-foreground">Delivered to your door</p>
                       </div>
                     </div>
                     <span className="text-xs font-semibold text-accent shrink-0">Free</span>
@@ -622,7 +646,11 @@ const ProductDetailPage: React.FC = () => {
                   Relevant picks from the same category.
                 </p>
               </div>
-              <ProductCarousel products={relatedProducts} />
+              <ProductCarousel
+                products={relatedProducts}
+                onNearEnd={loadMoreRelated}
+                isLoadingMore={isLoadingMoreRelated}
+              />
             </section>
           )}
         </div>

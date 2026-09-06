@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronDown, ShoppingCart, Cpu, Monitor, Settings, HardDrive, Zap, CircuitBoard } from 'lucide-react';
@@ -40,12 +40,37 @@ interface TierCardProps {
   selectedColorName: string | null;
 }
 
+// How often the image swaps while a card is hovered — matches ProductCard.
+const HOVER_CYCLE_MS = 2200;
+
 const TierCard: React.FC<TierCardProps> = ({ tier, selectedColorName }) => {
   const navigate = useNavigate();
   const { addItem, openCart } = useCartStore();
   const [showAllSpecs, setShowAllSpecs] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
 
   const pc = tier.builds.find((b) => b.color_name === selectedColorName) || tier.builds[0];
+
+  // Switching color (or tier data changing) should always restart the cycle
+  // on this build's own first photo, not wherever the previous build left off.
+  useEffect(() => {
+    setImageIndex(0);
+  }, [pc?.id]);
+
+  useEffect(() => {
+    if (!isHovered || !pc || pc.images.length <= 1) {
+      setImageIndex(0);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setImageIndex((prev) => (prev + 1) % pc.images.length);
+    }, HOVER_CYCLE_MS);
+
+    return () => window.clearInterval(timer);
+  }, [isHovered, pc]);
+
   if (!pc) return null;
 
   const visibleSpecs = showAllSpecs ? pc.products : pc.products.slice(0, 5);
@@ -78,9 +103,53 @@ const TierCard: React.FC<TierCardProps> = ({ tier, selectedColorName }) => {
 
   return (
     <NeonCard className="flex h-full flex-col p-0 overflow-hidden" glowColor="cyan" hover={false}>
-      <Link to={detailUrl} className="block">
-        <div className="aspect-square bg-white">
-          {pc.images[0] && <img src={pc.images[0]} alt={pc.name} className="h-full w-full object-cover" />}
+      <Link
+        to={detailUrl}
+        className="block"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="relative aspect-square bg-white">
+          {pc.images[imageIndex] && (
+            <motion.img
+              key={pc.images[imageIndex]}
+              src={pc.images[imageIndex]}
+              alt={pc.name}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.25 }}
+              className="h-full w-full object-cover"
+            />
+          )}
+
+          {/* Progress dots — one per gallery image, the active one fills up
+              over HOVER_CYCLE_MS in sync with the swap above (Instagram-
+              story style), so hovering shows how long until the next image. */}
+          {pc.images.length > 1 && (
+            <div
+              className={cn(
+                'absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1 transition-opacity duration-300',
+                isHovered ? 'opacity-100' : 'opacity-0'
+              )}
+            >
+              {pc.images.map((_, dotIndex) => (
+                <span key={dotIndex} className="relative h-1 w-5 overflow-hidden rounded-full bg-black/20">
+                  <motion.span
+                    className="absolute inset-y-0 left-0 rounded-full bg-primary"
+                    initial={false}
+                    animate={{
+                      width: dotIndex < imageIndex || (dotIndex === imageIndex && isHovered) ? '100%' : '0%',
+                    }}
+                    transition={
+                      dotIndex === imageIndex && isHovered
+                        ? { duration: HOVER_CYCLE_MS / 1000, ease: 'linear' }
+                        : { duration: 0.2 }
+                    }
+                  />
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </Link>
 
@@ -155,6 +224,9 @@ interface TypeSectionProps {
   type: PcSeriesType;
 }
 
+// The grid is 4-wide at its largest breakpoint — one full row shown by default.
+const TIER_PREVIEW_COUNT = 4;
+
 const TypeSection: React.FC<TypeSectionProps> = ({ type }) => {
   // `type.gaming_pcs || []` would create a new array reference every render,
   // defeating the memos below — memoize on `type.gaming_pcs` itself instead.
@@ -188,6 +260,31 @@ const TypeSection: React.FC<TypeSectionProps> = ({ type }) => {
 
   const [selectedColor, setSelectedColor] = useState<string | null>(colorNames[0] || null);
 
+  // A tier whose builds are all a single fixed color (e.g. the admin gave
+  // "Max Black" and "Max White" separate tier names instead of sharing one
+  // tier_name with two color siblings) never matches the *other* color, so
+  // it must be hidden rather than silently falling back to its only build —
+  // otherwise the color tabs above look like they do nothing. Tiers with no
+  // color info at all (colorless builds) are unaffected by the toggle.
+  const visibleTiers = useMemo(() => {
+    if (!selectedColor) return tiers;
+    return tiers.filter((tier) => {
+      const hasAnyColor = tier.builds.some((b) => b.color_name);
+      return !hasAnyColor || tier.builds.some((b) => b.color_name === selectedColor);
+    });
+  }, [tiers, selectedColor]);
+
+  const [showAll, setShowAll] = useState(false);
+
+  // Collapse back to the preview count whenever the color changes — the
+  // visible set is different now, so an "expanded" state from the previous
+  // color wouldn't mean anything here.
+  useEffect(() => {
+    setShowAll(false);
+  }, [selectedColor]);
+
+  const displayedTiers = showAll ? visibleTiers : visibleTiers.slice(0, TIER_PREVIEW_COUNT);
+
   if (tiers.length === 0) return null;
 
   return (
@@ -220,10 +317,18 @@ const TypeSection: React.FC<TypeSectionProps> = ({ type }) => {
       )}
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {tiers.map((tier) => (
+        {displayedTiers.map((tier) => (
           <TierCard key={tier.key} tier={tier} selectedColorName={selectedColor} />
         ))}
       </div>
+
+      {!showAll && visibleTiers.length > TIER_PREVIEW_COUNT && (
+        <div className="mt-8 flex justify-center">
+          <CyberButton variant="outline" onClick={() => setShowAll(true)}>
+            See more
+          </CyberButton>
+        </div>
+      )}
     </section>
   );
 };

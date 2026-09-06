@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Cpu, Heart, Languages, Menu, Moon, Scale, Search, ShoppingCart, Sun, X } from 'lucide-react';
+import { ChevronDown, Cpu, Heart, Languages, Menu, Moon, Search, ShoppingCart, Sun, X } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
-import { useCompareStore } from '@/store/compareStore';
 import { getPublicCategories, type Category } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -86,7 +85,6 @@ const Navbar: React.FC = () => {
   const { openCart, getTotalItems } = useCartStore();
   const totalItems = getTotalItems();
   const wishlistCount = useWishlistStore((state) => state.items.length);
-  const compareCount = useCompareStore((state) => state.items.length);
   const isLightMode = theme === 'light';
 
   useEffect(() => {
@@ -169,8 +167,6 @@ const Navbar: React.FC = () => {
   return (
     <>
       <motion.nav
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
         className={cn(
           "relative z-50 border-b border-border transition-all duration-300",
           isScrolled
@@ -256,19 +252,6 @@ const Navbar: React.FC = () => {
                   <Sun className="h-4 w-4 md:h-5 md:w-5" />
                 )}
               </motion.button>
-
-              <Link
-                to="/compare"
-                className="relative inline-flex h-9 w-9 items-center justify-center text-foreground/70 transition-colors hover:text-primary md:h-10 md:w-10"
-                aria-label={`Compare (${compareCount})`}
-              >
-                <Scale className="h-4 w-4 md:h-5 md:w-5" />
-                {compareCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                    {compareCount}
-                  </span>
-                )}
-              </Link>
 
               <Link
                 to="/wishlist"

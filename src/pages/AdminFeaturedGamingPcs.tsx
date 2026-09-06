@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Gamepad2,
   ImageIcon,
@@ -10,11 +12,13 @@ import {
   Plus,
   Save,
   Search,
+  Star,
   Trash2,
   Upload,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { CyberButton } from '@/components/ui/CyberButton';
 import { Loader } from '@/components/ui/Loader';
@@ -34,6 +38,7 @@ import {
   getProducts,
   getPcSeriesTypesFlat,
   type FeaturedGamingPc,
+  type FeaturedGamingPcImageOrderItem,
   type Product,
   type PcSeriesTypeFlat,
 } from '@/services/api';
@@ -70,6 +75,12 @@ interface FormState {
   fpsSettingsLabel: string;
 }
 
+// A single gallery slot — the on-screen order of this array *is* the photo
+// order sent to the server, so slot 0 is always the cover photo.
+type GalleryItem =
+  | { kind: 'existing'; url: string }
+  | { kind: 'new'; file: File; preview: string };
+
 const emptyForm: FormState = {
   name: '',
   description: '',
@@ -92,14 +103,14 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isReordering, setIsReordering] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [newFeatureInput, setNewFeatureInput] = useState('');
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [existingImages, setExistingImages] = useState<string[]>([]);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [productSearch, setProductSearch] = useState('');
@@ -118,7 +129,9 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
 
   useEffect(() => {
     return () => {
-      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+      gallery.forEach((item) => {
+        if (item.kind === 'new') URL.revokeObjectURL(item.preview);
+      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -142,6 +155,11 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
     });
   }, []);
 
+  useEffect(() => {
+    const lastPage = Math.max(1, Math.ceil(gamingPcs.length / itemsPerPage));
+    if (currentPage > lastPage) setCurrentPage(lastPage);
+  }, [gamingPcs, currentPage]);
+
   // Debounced product search — same pattern as the PC Builder's own search box.
   useEffect(() => {
     const handle = setTimeout(async () => {
@@ -163,10 +181,10 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
   const resetForm = () => {
     setForm(emptyForm);
     setNewFeatureInput('');
-    imagePreviews.forEach((url) => URL.revokeObjectURL(url));
-    setImageFiles([]);
-    setImagePreviews([]);
-    setExistingImages([]);
+    gallery.forEach((item) => {
+      if (item.kind === 'new') URL.revokeObjectURL(item.preview);
+    });
+    setGallery([]);
     setProductSearch('');
     setProductResults([]);
     setEditingId(null);
@@ -205,9 +223,7 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
       fpsScore: gamingPc.fps_score != null ? String(gamingPc.fps_score) : '',
       fpsSettingsLabel: gamingPc.fps_settings_label || '',
     });
-    setImageFiles([]);
-    setImagePreviews([]);
-    setExistingImages(gamingPc.images);
+    setGallery(gamingPc.images.map((url) => ({ kind: 'existing', url })));
     setEditingId(gamingPc.id);
     setIsFormOpen(true);
   };
@@ -228,22 +244,36 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
       validFiles.push(file);
     }
 
-    const combined = [...imageFiles, ...validFiles].slice(0, MAX_IMAGES);
-    if (imageFiles.length + validFiles.length > MAX_IMAGES) {
-      toast.error(`Only the first ${MAX_IMAGES} photos were kept`);
+    if (gallery.length + validFiles.length > MAX_IMAGES) {
+      toast.error(`Only ${MAX_IMAGES} photos are allowed`);
     }
+    const room = Math.max(0, MAX_IMAGES - gallery.length);
+    const newItems: GalleryItem[] = validFiles.slice(0, room).map((file) => ({
+      kind: 'new',
+      file,
+      preview: URL.createObjectURL(file),
+    }));
 
-    imagePreviews.forEach((url) => URL.revokeObjectURL(url));
-    setImageFiles(combined);
-    setImagePreviews(combined.map((file) => URL.createObjectURL(file)));
-    // New uploads always fully replace the existing gallery on save.
-    setExistingImages([]);
+    setGallery((prev) => [...prev, ...newItems]);
   };
 
-  const handleRemoveNewImage = (index: number) => {
-    URL.revokeObjectURL(imagePreviews[index]);
-    setImageFiles((prev) => prev.filter((_, i) => i !== index));
-    setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveImage = (index: number) => {
+    setGallery((prev) => {
+      const item = prev[index];
+      if (item?.kind === 'new') URL.revokeObjectURL(item.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  // Cover is always slot 0 — "setting" a cover just moves that photo to the front.
+  const handleSetCover = (index: number) => {
+    setGallery((prev) => {
+      if (index <= 0 || index >= prev.length) return prev;
+      const copy = [...prev];
+      const [item] = copy.splice(index, 1);
+      copy.unshift(item);
+      return copy;
+    });
   };
 
   const handleAddFeature = () => {
@@ -305,8 +335,7 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
       toast.error('Please enter a valid price');
       return;
     }
-    const hasImages = imageFiles.length > 0 || existingImages.length > 0;
-    if (!hasImages) {
+    if (gallery.length === 0) {
       toast.error('At least 1 photo is required');
       return;
     }
@@ -330,6 +359,11 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
     };
 
     if (editingId) {
+      const newFiles = gallery.filter((item): item is GalleryItem & { kind: 'new' } => item.kind === 'new').map((item) => item.file);
+      const imageOrder: FeaturedGamingPcImageOrderItem[] = gallery.map((item) =>
+        item.kind === 'existing' ? { type: 'existing', url: item.url } : { type: 'new' }
+      );
+
       const response = await updateFeaturedGamingPc(editingId, {
         name: form.name.trim(),
         description: form.description.trim() || null,
@@ -337,7 +371,8 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
         key_features: form.keyFeatures,
         is_active: form.isActive,
         products,
-        images: imageFiles.length > 0 ? imageFiles : undefined,
+        images: newFiles,
+        image_order: imageOrder,
         ...seriesFields,
       });
 
@@ -350,6 +385,7 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
         toast.error(response.message || 'Failed to update featured gaming PC');
       }
     } else {
+      const newFiles = gallery.filter((item): item is GalleryItem & { kind: 'new' } => item.kind === 'new').map((item) => item.file);
       const response = await createFeaturedGamingPc({
         name: form.name.trim(),
         description: form.description.trim() || null,
@@ -357,7 +393,7 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
         key_features: form.keyFeatures,
         is_active: form.isActive,
         products,
-        images: imageFiles,
+        images: newFiles,
         ...seriesFields,
       });
 
@@ -414,6 +450,10 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
     }
     setIsReordering(false);
   };
+
+  const totalPages = Math.max(1, Math.ceil(gamingPcs.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const pagedGamingPcs = gamingPcs.slice(startIndex, startIndex + itemsPerPage);
 
   return (
     <AdminLayout>
@@ -522,34 +562,38 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
                     <Label>Photos *</Label>
                     <p className="text-xs text-muted-foreground mb-2">{IMAGE_GUIDANCE}</p>
                     <div className="flex flex-wrap gap-3">
-                      {existingImages.map((url, index) => (
-                        <div key={url} className="relative h-24 w-24 overflow-hidden rounded-md border border-border">
-                          <img src={url} alt="" className="h-full w-full object-cover" />
-                          {index === 0 && (
-                            <span className="absolute bottom-0 left-0 right-0 bg-black/70 text-center text-[10px] text-white py-0.5">
-                              COVER
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                      {imagePreviews.map((url, index) => (
-                        <div key={url} className="relative h-24 w-24 overflow-hidden rounded-md border border-border">
-                          <img src={url} alt="" className="h-full w-full object-cover" />
-                          {index === 0 && existingImages.length === 0 && (
-                            <span className="absolute bottom-0 left-0 right-0 bg-black/70 text-center text-[10px] text-white py-0.5">
-                              COVER
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveNewImage(index)}
-                            className="absolute top-1 right-1 rounded-full bg-black/70 p-1 text-white hover:bg-destructive"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
-                      {existingImages.length + imagePreviews.length < MAX_IMAGES && (
+                      {gallery.map((item, index) => {
+                        const url = item.kind === 'existing' ? item.url : item.preview;
+                        return (
+                          <div key={url} className="group relative h-24 w-24 overflow-hidden rounded-md border border-border">
+                            <img src={url} alt="" className="h-full w-full object-cover" />
+                            {index === 0 ? (
+                              <span className="absolute bottom-0 left-0 right-0 bg-black/70 text-center text-[10px] text-white py-0.5">
+                                COVER
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSetCover(index)}
+                                title="Set as cover photo"
+                                className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 bg-black/70 py-0.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary"
+                              >
+                                <Star className="h-2.5 w-2.5" />
+                                Set cover
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveImage(index)}
+                              title="Remove photo"
+                              className="absolute top-1 right-1 rounded-full bg-black/70 p-1 text-white hover:bg-destructive"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {gallery.length < MAX_IMAGES && (
                         <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors">
                           <Upload className="h-5 w-5" />
                           <span className="text-[10px]">Add photo</span>
@@ -562,17 +606,12 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
                           />
                         </label>
                       )}
-                      {existingImages.length + imagePreviews.length === 0 && (
+                      {gallery.length === 0 && (
                         <div className="flex h-24 w-24 items-center justify-center rounded-md border border-border bg-muted/30">
                           <ImageIcon className="h-6 w-6 text-muted-foreground" />
                         </div>
                       )}
                     </div>
-                    {existingImages.length > 0 && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Uploading new photos replaces this entire gallery.
-                      </p>
-                    )}
                   </div>
 
                   {/* Products included in the build */}
@@ -801,7 +840,9 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
                 </NeonCard>
               ) : (
                 <div className="space-y-3">
-                  {gamingPcs.map((gamingPc, index) => (
+                  {pagedGamingPcs.map((gamingPc, pageIndex) => {
+                    const index = startIndex + pageIndex;
+                    return (
                     <motion.div key={gamingPc.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                       <NeonCard className="p-4" glowColor="cyan" hover={false}>
                         <div className="flex items-center gap-4">
@@ -865,7 +906,64 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
                         </div>
                       </NeonCard>
                     </motion.div>
-                  ))}
+                    );
+                  })}
+                </div>
+              )}
+
+              {totalPages > 1 && (
+                <div className="mt-8 flex items-center justify-center gap-2">
+                  <CyberButton
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </CyberButton>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      if (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      ) {
+                        return (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={cn(
+                              'w-10 h-10 rounded-lg border transition-colors',
+                              currentPage === page
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'border-border hover:bg-muted'
+                            )}
+                          >
+                            {page}
+                          </button>
+                        );
+                      } else if (page === currentPage - 2 || page === currentPage + 2) {
+                        return (
+                          <span key={page} className="px-2 text-muted-foreground">
+                            ...
+                          </span>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
+
+                  <CyberButton
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </CyberButton>
                 </div>
               )}
             </motion.div>

@@ -5,7 +5,7 @@ const trustBadges = [
   { icon: '/google.webp', title: '4.8/5 Rating', subtitle: 'Trusted Customer Reviews' },
   { icon: '/pc.webp', title: '500+ Builds', subtitle: 'Custom Systems Shipped' },
   { icon: '/united-arab-emirates.webp', title: 'UAE Based', subtitle: 'Proudly Serving The Emirates' },
-  { icon: '/shield.webp', title: '3-Yr Warranty', subtitle: 'On Every Build' },
+  { icon: '/shield.webp', title: '1-Yr Warranty', subtitle: 'On Every Build' },
   { icon: '/verify.webp', title: '100% Genuine', subtitle: 'Certified Components Only' },
 ];
 

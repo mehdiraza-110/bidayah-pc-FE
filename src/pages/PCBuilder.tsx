@@ -340,16 +340,26 @@ const PCBuilderPage: React.FC = () => {
       didAddUnit = true;
     }
 
-    // Only auto-apply the inferred vendor as a filter for categories that
-    // actually drive a compatibility rule (CPU, Motherboard, ...) — for
-    // trivial categories (fans, keyboards, ...) this would otherwise narrow
-    // the category's own remaining choices down to whatever vendor was just
-    // picked, which isn't wanted.
-    if (!selectedVendors[categoryId] && inferredVendor && triggerCategoryIds.has(categoryId)) {
-      setSelectedVendors(prev => ({
-        ...prev,
-        [categoryId]: inferredVendor,
-      }));
+    // Auto-apply the inferred vendor as a filter for categories that actually
+    // drive a compatibility rule (CPU, Motherboard, ...) — for trivial
+    // categories (fans, keyboards, ...) this would otherwise narrow the
+    // category's own remaining choices down to whatever vendor was just
+    // picked, which isn't wanted. Unlike before, this now always tracks the
+    // CURRENT product's vendor (not just the first pick) so switching e.g.
+    // CPU brand from AMD to Intel is actually reflected here.
+    const previousTriggerVendor = selectedVendors[categoryId];
+    const triggerVendorChanged =
+      triggerCategoryIds.has(categoryId) && !!inferredVendor && previousTriggerVendor?.id !== inferredVendor.id;
+
+    if (triggerVendorChanged) {
+      // A trigger category's vendor changing (e.g. CPU brand) can invalidate
+      // whatever was already picked in every other category (motherboard
+      // socket, RAM type, cooler mount, ...). Compatibility rules live
+      // entirely server-side, so rather than risk leaving an incompatible
+      // part selected, clear every other category's selection and let the
+      // user re-pick from the freshly filtered lists.
+      setSelectedProducts(prev => ({ [categoryId]: prev[categoryId] }));
+      setSelectedVendors(prev => ({ [categoryId]: inferredVendor }));
     }
 
     // Auto-advance the accordion to the next incomplete step: immediately for
@@ -381,10 +391,23 @@ const PCBuilderPage: React.FC = () => {
   };
 
   const handleSelectVendor = (vendor: Vendor | null) => {
-    setSelectedVendors(prev => ({
-      ...prev,
-      [activeCategoryId]: vendor,
-    }));
+    const previousVendor = selectedVendors[activeCategoryId];
+    const triggerVendorChanged =
+      triggerCategoryIds.has(activeCategoryId) && (previousVendor?.id ?? null) !== (vendor?.id ?? null);
+
+    if (triggerVendorChanged) {
+      // Same reasoning as in handleSelectProduct: switching a trigger
+      // category's vendor (e.g. CPU brand) can invalidate every other
+      // category's already-picked part, so clear them all rather than leave
+      // a stale, potentially-incompatible selection in place.
+      setSelectedVendors(() => ({ [activeCategoryId]: vendor }));
+      setSelectedProducts(prev => ({ [activeCategoryId]: prev[activeCategoryId] }));
+    } else {
+      setSelectedVendors(prev => ({
+        ...prev,
+        [activeCategoryId]: vendor,
+      }));
+    }
 
     // Switching vendor filters resets the pick for single-select categories,
     // but leaves multi-select categories' existing selections untouched.
@@ -1025,8 +1048,12 @@ const PCBuilderPage: React.FC = () => {
                     </p>
                   </div>
 
+                  <p className="mt-6 text-sm font-semibold text-destructive">
+                    The price is not final. Our team will send you a pricing quotation after order placement.
+                  </p>
+
                   {/* Action Buttons */}
-                  <div className="mt-6 space-y-3">
+                  <div className="mt-3 space-y-3">
                     <CyberButton
                       size="lg"
                       className="w-full"

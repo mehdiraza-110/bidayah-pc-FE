@@ -59,7 +59,7 @@ const FeaturesSection: React.FC = () => {
           <NeonCard className="feature-card p-8 lg:col-span-2 lg:row-span-2 flex flex-col justify-center bg-gradient-to-br from-primary/10 via-card to-card">
             <Shield className="w-10 h-10 text-primary mb-6" />
             <div className="font-orbitron text-5xl font-bold text-foreground mb-2">
-              3-Year
+              1-Year
             </div>
             <h3 className="font-orbitron text-xl font-bold text-foreground mb-3">
               Full Warranty Coverage

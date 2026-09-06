@@ -80,7 +80,7 @@ const AdminDashboardPage: React.FC = () => {
     },
     {
       label: 'Revenue',
-      value: `AED ${statistics.total_revenue_this_month.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: `AED ${Number(statistics.total_revenue_this_month).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       subtitle: `This Month (${statistics.month})`,
       icon: DollarSign,
       color: 'green',

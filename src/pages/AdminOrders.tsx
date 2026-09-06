@@ -351,7 +351,7 @@ const AdminOrdersPage: React.FC = () => {
                     const orderStatus = order.status as OrderStatus;
                     const statusConfigItem = statusConfig[orderStatus] || statusConfig.pending;
                     const StatusIcon = statusConfigItem.icon;
-                    const customerName = `${order.shipping_info.first_name} ${order.shipping_info.last_name}`;
+                    const customerName = `${order.shipping_info.first_name} ${order.shipping_info.last_name}`.trim();
                     const itemsCount = order.items?.length || 0;
                     const orderDate = format(new Date(order.created_at), 'MMM dd, yyyy');
                     
@@ -377,7 +377,7 @@ const AdminOrdersPage: React.FC = () => {
                         </td>
                         <td className="p-4">
                           <span className="font-orbitron font-bold text-primary">
-                            AED {order.total.toLocaleString()}
+                            AED {Number(order.total).toLocaleString()}
                           </span>
                         </td>
                         <td className="p-4">

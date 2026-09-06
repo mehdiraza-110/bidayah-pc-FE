@@ -14,7 +14,6 @@ import PCBuilder from "./pages/PCBuilder";
 import Checkout from "./pages/Checkout";
 import ThankYou from "./pages/ThankYou";
 import Wishlist from "./pages/Wishlist";
-import Compare from "./pages/Compare";
 import AdminLogin from "./pages/AdminLogin";
 import AdminSignup from "./pages/AdminSignup";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -39,6 +38,17 @@ import AdminPcSeriesWorkbench from "./pages/AdminPcSeriesWorkbench";
 import AdminBlogs from "./pages/AdminBlogs";
 import Blog from "./pages/Blog";
 import BlogDetail from "./pages/BlogDetail";
+import AdminNews from "./pages/AdminNews";
+import News from "./pages/News";
+import NewsDetail from "./pages/NewsDetail";
+import AdminTeam from "./pages/AdminTeam";
+import OurTeam from "./pages/OurTeam";
+import Contact from "./pages/Contact";
+import About from "./pages/About";
+import FAQ from "./pages/FAQ";
+import Warranty from "./pages/Warranty";
+import Returns from "./pages/Returns";
+import AdminContactMessages from "./pages/AdminContactMessages";
 import NotFound from "./pages/NotFound";
 import { WhatsAppWidget } from "@/components/layout/WhatsAppWidget";
 
@@ -73,10 +83,17 @@ const App = () => (
               <Route path="/pc-builder" element={<PCBuilder />} />
               <Route path="/blog" element={<Blog />} />
               <Route path="/blog/:slug" element={<BlogDetail />} />
+              <Route path="/news" element={<News />} />
+              <Route path="/news/:slug" element={<NewsDetail />} />
+              <Route path="/our-team" element={<OurTeam />} />
               <Route path="/wishlist" element={<Wishlist />} />
-              <Route path="/compare" element={<Compare />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/thank-you" element={<ThankYou />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/faq" element={<FAQ />} />
+              <Route path="/warranty" element={<Warranty />} />
+              <Route path="/returns" element={<Returns />} />
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/signup" element={<AdminSignup />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -105,6 +122,10 @@ const App = () => (
               <Route path="/admin/pc-series/:seriesId" element={<AdminPcSeriesWorkbench />} />
               <Route path="/admin/blogs" element={<AdminBlogs />} />
               <Route path="/admin/blogs/:id" element={<AdminBlogs />} />
+              <Route path="/admin/news" element={<AdminNews />} />
+              <Route path="/admin/news/:id" element={<AdminNews />} />
+              <Route path="/admin/team" element={<AdminTeam />} />
+              <Route path="/admin/contact-messages" element={<AdminContactMessages />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AnimatePresence>

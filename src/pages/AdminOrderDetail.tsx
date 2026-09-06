@@ -259,8 +259,8 @@ const AdminOrderDetailPage: React.FC = () => {
                       )}
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span>Qty: {item.quantity}</span>
-                        <span>Price: AED {item.price.toLocaleString()}</span>
-                        <span className="font-semibold text-foreground">Subtotal: AED {item.subtotal.toLocaleString()}</span>
+                        <span>Price: AED {Number(item.price).toLocaleString()}</span>
+                        <span className="font-semibold text-foreground">Subtotal: AED {Number(item.subtotal).toLocaleString()}</span>
                       </div>
                     </div>
                   </motion.div>
@@ -270,34 +270,39 @@ const AdminOrderDetailPage: React.FC = () => {
               <div className="mt-6 pt-6 border-t border-border">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-muted-foreground">Subtotal:</span>
-                  <span className="font-semibold">AED {order.subtotal.toLocaleString()}</span>
+                  <span className="font-semibold">AED {Number(order.subtotal).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-muted-foreground">Shipping:</span>
-                  <span className="font-semibold">AED {order.shipping.toLocaleString()}</span>
+                  <span className="font-semibold">AED {Number(order.shipping).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-muted-foreground">Tax:</span>
-                  <span className="font-semibold">AED {order.tax.toLocaleString()}</span>
+                  <span className="font-semibold">AED {Number(order.tax).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center pt-4 border-t border-border">
                   <span className="font-orbitron text-lg font-bold">Total:</span>
-                  <span className="font-orbitron text-xl font-bold text-primary">AED {order.total.toLocaleString()}</span>
+                  <span className="font-orbitron text-xl font-bold text-primary">AED {Number(order.total).toLocaleString()}</span>
                 </div>
               </div>
             </NeonCard>
 
-            {/* Shipping Information */}
+            {/* Customer Information — checkout only collects one combined
+                name/email/phone/address, used for both shipping and billing.
+                City/state/zip/country only show for older orders that still
+                have that data (this build no longer collects it), and the
+                billing card is only shown if it actually differs from the
+                customer info (again, only possible on an older order). */}
             <NeonCard className="p-6" glowColor="green" hover={false}>
               <div className="flex items-center gap-3 mb-6">
                 <Truck className="w-5 h-5 text-primary" />
-                <h2 className="font-orbitron text-xl font-bold">SHIPPING INFORMATION</h2>
+                <h2 className="font-orbitron text-xl font-bold">CUSTOMER INFORMATION</h2>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1">Name</Label>
-                  <p className="font-semibold">{order.shipping_info.first_name} {order.shipping_info.last_name}</p>
+                  <p className="font-semibold">{`${order.shipping_info.first_name} ${order.shipping_info.last_name}`.trim()}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1">Email</Label>
@@ -311,63 +316,81 @@ const AdminOrderDetailPage: React.FC = () => {
                   <Label className="text-xs text-muted-foreground mb-1">Address</Label>
                   <p className="font-semibold">{order.shipping_info.address}</p>
                 </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">City</Label>
-                  <p className="font-semibold">{order.shipping_info.city}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">State</Label>
-                  <p className="font-semibold">{order.shipping_info.state}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">ZIP Code</Label>
-                  <p className="font-semibold">{order.shipping_info.zip_code}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">Country</Label>
-                  <p className="font-semibold">{order.shipping_info.country}</p>
-                </div>
+                {order.shipping_info.city && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1">City</Label>
+                    <p className="font-semibold">{order.shipping_info.city}</p>
+                  </div>
+                )}
+                {order.shipping_info.state && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1">State</Label>
+                    <p className="font-semibold">{order.shipping_info.state}</p>
+                  </div>
+                )}
+                {order.shipping_info.zip_code && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1">ZIP Code</Label>
+                    <p className="font-semibold">{order.shipping_info.zip_code}</p>
+                  </div>
+                )}
+                {order.shipping_info.country && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1">Country</Label>
+                    <p className="font-semibold">{order.shipping_info.country}</p>
+                  </div>
+                )}
               </div>
             </NeonCard>
 
-            {/* Billing Information */}
-            <NeonCard className="p-6" glowColor="orange" hover={false}>
-              <div className="flex items-center gap-3 mb-6">
-                <CreditCard className="w-5 h-5 text-primary" />
-                <h2 className="font-orbitron text-xl font-bold">BILLING INFORMATION</h2>
-              </div>
+            {(order.billing_info.address !== order.shipping_info.address ||
+              order.billing_info.email !== order.shipping_info.email) && (
+              <NeonCard className="p-6" glowColor="orange" hover={false}>
+                <div className="flex items-center gap-3 mb-6">
+                  <CreditCard className="w-5 h-5 text-primary" />
+                  <h2 className="font-orbitron text-xl font-bold">BILLING INFORMATION</h2>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">Name</Label>
-                  <p className="font-semibold">{order.billing_info.first_name} {order.billing_info.last_name}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1">Name</Label>
+                    <p className="font-semibold">{`${order.billing_info.first_name} ${order.billing_info.last_name}`.trim()}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1">Email</Label>
+                    <p className="font-semibold">{order.billing_info.email}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1">Address</Label>
+                    <p className="font-semibold">{order.billing_info.address}</p>
+                  </div>
+                  {order.billing_info.city && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1">City</Label>
+                      <p className="font-semibold">{order.billing_info.city}</p>
+                    </div>
+                  )}
+                  {order.billing_info.state && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1">State</Label>
+                      <p className="font-semibold">{order.billing_info.state}</p>
+                    </div>
+                  )}
+                  {order.billing_info.zip_code && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1">ZIP Code</Label>
+                      <p className="font-semibold">{order.billing_info.zip_code}</p>
+                    </div>
+                  )}
+                  {order.billing_info.country && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1">Country</Label>
+                      <p className="font-semibold">{order.billing_info.country}</p>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">Email</Label>
-                  <p className="font-semibold">{order.billing_info.email}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">Address</Label>
-                  <p className="font-semibold">{order.billing_info.address}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">City</Label>
-                  <p className="font-semibold">{order.billing_info.city}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">State</Label>
-                  <p className="font-semibold">{order.billing_info.state}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">ZIP Code</Label>
-                  <p className="font-semibold">{order.billing_info.zip_code}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1">Country</Label>
-                  <p className="font-semibold">{order.billing_info.country}</p>
-                </div>
-              </div>
-            </NeonCard>
+              </NeonCard>
+            )}
           </div>
 
           {/* Right Column - Payment Screenshot & Order Info */}

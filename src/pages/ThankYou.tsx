@@ -124,7 +124,7 @@ const ThankYouPage: React.FC = () => {
                 Continue Shopping
               </CyberButton>
               <CyberButton
-                onClick={() => navigate(-1)}
+                onClick={() => navigate('/')}
                 variant="outline"
                 className="w-full sm:w-auto"
               >

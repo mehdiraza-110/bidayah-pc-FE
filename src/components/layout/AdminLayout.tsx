@@ -12,7 +12,6 @@ import {
   LogOut,
   Menu,
   X,
-  Shield,
   Star,
   CreditCard,
   SlidersHorizontal,
@@ -24,6 +23,9 @@ import {
   LayoutGrid,
   Gamepad2,
   Layers,
+  MessageSquare,
+  Rss,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GridBackground } from '@/components/effects/GridBackground';
@@ -64,6 +66,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       name: 'Blogs',
       path: '/admin/blogs',
       icon: Newspaper,
+    },
+    {
+      name: 'News',
+      path: '/admin/news',
+      icon: Rss,
+    },
+    {
+      name: 'Team',
+      path: '/admin/team',
+      icon: Users,
     },
     {
       name: 'Customization',
@@ -121,6 +133,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       icon: MapPin,
     },
     {
+      name: 'Contact Messages',
+      path: '/admin/contact-messages',
+      icon: MessageSquare,
+    },
+    {
       name: 'Analytics',
       path: '/admin/analytics',
       icon: BarChart3,
@@ -175,13 +192,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         {/* Sidebar Header */}
         <div className="p-6 border-b border-border">
           <div className="flex items-center justify-between">
-            <Link to="/admin/dashboard" className="flex items-center gap-2">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Shield className="w-6 h-6 text-primary" />
+            <Link to="/admin/dashboard" className="flex items-center gap-3">
+              <img src="/Bidayah-New.png" alt="Bidayah" className="h-10 w-10 object-contain shrink-0" />
+              <div className="leading-tight">
+                <span className="block font-orbitron text-lg font-bold">BIDAYAH</span>
+                <span className="block text-xs text-muted-foreground">Admin Portal</span>
               </div>
-              <span className="font-orbitron text-xl font-bold">
-                ADMIN
-              </span>
             </Link>
             <button
               onClick={() => setIsSidebarOpen(false)}

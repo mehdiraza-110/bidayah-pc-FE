@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, MapPin } from 'lucide-react';
 import { getPublicCategories, type Category } from '@/services/api';
-import { TwitterIcon, InstagramIcon, YouTubeIcon, TwitchIcon } from '@/components/icons/SocialIcons';
+import { InstagramIcon, YouTubeIcon, TikTokIcon, XIcon, ThreadsIcon, FacebookIcon } from '@/components/icons/SocialIcons';
 import { sortByCategoryPriority } from '@/lib/categoryPriority';
 
 const Footer: React.FC = () => {
@@ -37,25 +37,26 @@ const Footer: React.FC = () => {
   const footerLinks = {
     products: productLinks,
     support: [
-      { name: 'Contact Us', path: '#' },
-      { name: 'FAQ', path: '#' },
-      { name: 'Warranty', path: '#' },
-      { name: 'Returns', path: '#' },
+      { name: 'Contact Us', path: '/contact' },
+      { name: 'FAQ', path: '/faq' },
+      { name: 'Warranty', path: '/warranty' },
+      { name: 'Returns', path: '/returns' },
     ],
     company: [
       { name: 'Blog', path: '/blog' },
-      { name: 'About Us', path: '#' },
-      { name: 'Careers', path: '#' },
-      { name: 'Press', path: '#' },
-      { name: 'Partners', path: '#' },
+      { name: 'News', path: '/news' },
+      { name: 'About Us', path: '/about' },
+      { name: 'Our Team', path: '/our-team' },
     ],
   };
 
   const socialLinks = [
-    { icon: TwitterIcon, href: '#', label: 'Twitter' },
-    { icon: InstagramIcon, href: '#', label: 'Instagram' },
-    { icon: YouTubeIcon, href: '#', label: 'YouTube' },
-    { icon: TwitchIcon, href: '#', label: 'Twitch' },
+    { icon: TikTokIcon, href: 'https://www.tiktok.com/@mr.freepc.guy?_r=1&_t=ZS-99W3KduncG5', label: 'TikTok' },
+    { icon: YouTubeIcon, href: 'https://www.youtube.com/@bidayahpc', label: 'YouTube' },
+    { icon: InstagramIcon, href: 'https://www.instagram.com/bidayahpc?stkn=MTljeGtpa2ZsZ3N6cQ%3D%3D&utm_source=qr', label: 'Instagram' },
+    { icon: XIcon, href: 'https://x.com/sultan_fraz?s=11', label: 'X' },
+    { icon: ThreadsIcon, href: 'https://www.threads.com/@bidayahpc?igshid=NTc4MTIwNjQ2YQ==', label: 'Threads' },
+    { icon: FacebookIcon, href: 'https://www.facebook.com/share/1Efs7ct9PA/?mibextid=wwXIfr', label: 'Facebook' },
   ];
 
   return (
@@ -70,7 +71,7 @@ const Footer: React.FC = () => {
       </div>
 
       <div className="container mx-auto px-4 py-16">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-10 lg:gap-12">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-10 lg:gap-12">
           {/* Brand */}
           <div className="col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-6">
@@ -80,7 +81,7 @@ const Footer: React.FC = () => {
               </span>
             </Link>
             <p className="text-muted-foreground mb-6 max-w-sm">
-              Custom gaming PCs and genuine hardware, hand-built and backed by a 3-year warranty on every system.
+              Custom gaming PCs and genuine hardware, hand-built and backed by a 1-year warranty on every system.
             </p>
             
             {/* Social Links */}
@@ -89,6 +90,8 @@ const Footer: React.FC = () => {
                 <motion.a
                   key={social.label}
                   href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   aria-label={social.label}
                   className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center transition-all border border-transparent hover:border-primary/30 hover:bg-muted/70"
                   whileHover={{ scale: 1.1, y: -2 }}

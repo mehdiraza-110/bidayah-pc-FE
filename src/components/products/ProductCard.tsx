@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Heart, Scale, Search, ShoppingCart } from 'lucide-react';
+import { Check, Heart, Search, ShoppingCart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Product } from '@/data/products';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
-import { useCompareStore, MAX_COMPARE_ITEMS } from '@/store/compareStore';
 import { ProductQuickView } from '@/components/products/ProductQuickView';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { productUrl } from '@/lib/slug';
@@ -27,8 +26,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
   const { addItem, openCart } = useCartStore();
   const isWishlisted = useWishlistStore((state) => state.isWishlisted(product.id));
   const toggleWishlist = useWishlistStore((state) => state.toggleItem);
-  const isCompared = useCompareStore((state) => state.isCompared(product.id));
-  const toggleCompare = useCompareStore((state) => state.toggleItem);
 
   // Main image first, then the rest of the gallery — de-duped in case the main
   // image is also listed in `media`.
@@ -66,15 +63,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
     toast.success(added ? 'Added to wishlist' : 'Removed from wishlist');
   };
 
-  const handleToggleCompare = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const result = toggleCompare(product);
-    if (result === 'added') toast.success('Added to compare');
-    else if (result === 'removed') toast.success('Removed from compare');
-    else toast.error(`You can compare up to ${MAX_COMPARE_ITEMS} products at a time`);
-  };
-
   const handleQuickView = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -84,7 +72,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
   const actionButtons = [
     { icon: ShoppingCart, label: 'Add to cart', onClick: handleAddToCart, active: false },
     { icon: Search, label: 'Quick view', onClick: handleQuickView, active: false },
-    { icon: Scale, label: 'Compare', onClick: handleToggleCompare, active: isCompared },
     { icon: Heart, label: 'Wishlist', onClick: handleToggleWishlist, active: isWishlisted },
   ];
 

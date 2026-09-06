@@ -881,6 +881,19 @@ const AdminProductsPage: React.FC = () => {
       <div className="p-6" ref={containerRef}>
         {/* Header */}
         <div className="mb-8">
+          {isFormOpen && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsFormOpen(false);
+                navigate('/admin/products');
+              }}
+              className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Back to Products
+            </button>
+          )}
           <div className="flex items-center justify-between">
             <div>
               <h1 className="font-orbitron text-3xl font-bold mb-2">

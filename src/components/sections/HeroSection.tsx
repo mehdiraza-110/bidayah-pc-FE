@@ -22,7 +22,7 @@ const FALLBACK_CONTENT: HeroContent = {
   mode: 'single',
   headline_line_1: 'Gaming PCs,',
   headline_line_2: 'Built To Win.',
-  subtext: 'Hand-built rigs with real component transparency and a 3-year warranty. Configure your own build or shop ready-to-ship systems today.',
+  subtext: 'Hand-built rigs with real component transparency and a 1-year warranty. Configure your own build or shop ready-to-ship systems today.',
   button_1_text: 'Shop Gaming PCs',
   button_1_link: '/products',
   button_2_text: 'Start Custom Build',
@@ -191,12 +191,12 @@ const HeroSection: React.FC = () => {
       {!isSlideshow && (
       <div ref={contentRef} className="container relative z-10 mx-auto px-4">
         <div className="max-w-xl text-center md:text-left">
-          <motion.div
+          {/* <motion.div
             initial={{ scaleX: 0 }}
             animate={{ scaleX: 1 }}
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             className="mx-auto mb-6 h-1 w-16 origin-left rounded-full bg-primary md:mx-0"
-          />
+          /> */}
 
           <h1 className="font-orbitron text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl overflow-hidden">
             {[heroContent.headline_line_1, heroContent.headline_line_2].filter(Boolean).map((line, i) => (

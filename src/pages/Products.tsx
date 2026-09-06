@@ -275,7 +275,8 @@ const ProductsPage: React.FC = () => {
                     "fixed lg:static inset-y-0 left-0 z-[60] lg:z-0",
                     "bg-card lg:bg-transparent p-6 lg:p-0",
                     "overflow-y-auto shadow-2xl lg:shadow-none",
-                    "border-r border-border lg:border-0"
+                    "border-r border-border lg:border-0",
+                    "lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)]"
                   )}
                 >
                   <div className="sticky -top-6 z-10 -mx-6 mb-6 flex items-center justify-between border-b border-border bg-card px-6 py-4 lg:hidden">
@@ -287,15 +288,15 @@ const ProductsPage: React.FC = () => {
 
                   {/* Categories — collapsed to just "All" + whichever one is selected,
                       instead of dumping the entire list open at once. */}
-                  <div className="mb-8">
-                    <h4 className="font-orbitron text-sm font-bold text-primary uppercase tracking-wider mb-4">
+                  <div className="mb-6">
+                    <h4 className="font-orbitron text-sm font-bold text-primary uppercase tracking-wider mb-3">
                       Categories
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <motion.button
                         onClick={() => handleCategoryChange('All')}
                         className={cn(
-                          "w-full text-left px-4 py-3 rounded-lg transition-all font-rajdhani",
+                          "w-full text-left px-3.5 py-2 rounded-lg transition-all font-rajdhani text-sm",
                           (activeCategory === 'All' || !activeCategoryId)
                             ? "bg-primary text-primary-foreground"
                             : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -310,7 +311,7 @@ const ProductsPage: React.FC = () => {
                         <motion.button
                           key={activeCategoryObj.id}
                           onClick={() => handleCategoryChange(activeCategoryObj.id)}
-                          className="w-full text-left px-4 py-3 rounded-lg font-rajdhani bg-primary text-primary-foreground"
+                          className="w-full text-left px-3.5 py-2 rounded-lg font-rajdhani text-sm bg-primary text-primary-foreground"
                         >
                           {activeCategoryObj.category_name}
                         </motion.button>
@@ -323,14 +324,14 @@ const ProductsPage: React.FC = () => {
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             transition={{ duration: 0.2 }}
-                            className="space-y-2 overflow-hidden"
+                            className="space-y-1.5 overflow-hidden"
                           >
                             {categories.map((category) => (
                               <motion.button
                                 key={category.id}
                                 onClick={() => handleCategoryChange(category.id)}
                                 className={cn(
-                                  "w-full text-left px-4 py-3 rounded-lg transition-all font-rajdhani",
+                                  "w-full text-left px-3.5 py-2 rounded-lg transition-all font-rajdhani text-sm",
                                   activeCategoryId === category.id
                                     ? "bg-primary text-primary-foreground"
                                     : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -349,10 +350,10 @@ const ProductsPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setShowAllCategories((prev) => !prev)}
-                          className="flex w-full items-center justify-center gap-1.5 px-4 py-2 text-sm font-rajdhani font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                          className="flex w-full items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-rajdhani font-semibold text-muted-foreground hover:text-foreground transition-colors"
                         >
                           {showAllCategories ? 'Show Less' : 'Show All Categories'}
-                          <ChevronDown className={cn("w-4 h-4 transition-transform", showAllCategories && "rotate-180")} />
+                          <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showAllCategories && "rotate-180")} />
                         </button>
                       )}
                     </div>
@@ -364,14 +365,14 @@ const ProductsPage: React.FC = () => {
                   {(() => {
                     const vendorOptions = activeCategoryId ? (categoryVendors ?? []) : vendors;
                     return vendorOptions.length > 0 && (
-                      <div className="mb-8">
-                        <h4 className="font-orbitron text-sm font-bold text-primary uppercase tracking-wider mb-4">
+                      <div className="mb-6">
+                        <h4 className="font-orbitron text-sm font-bold text-primary uppercase tracking-wider mb-3">
                           Vendors
                         </h4>
                         <select
                           value={activeVendorId}
                           onChange={(e) => handleVendorChange(e.target.value)}
-                          className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground focus:outline-none focus:border-primary"
+                          className="w-full px-3.5 py-2 text-sm rounded-lg bg-muted border border-border text-foreground focus:outline-none focus:border-primary"
                         >
                           <option value="">All Vendors</option>
                           {vendorOptions.map((vendor) => (
@@ -388,17 +389,17 @@ const ProductsPage: React.FC = () => {
                       Features + values the admin has actually set on this
                       category's published products. */}
                   {categoryFilters.length > 0 && (
-                    <div className="mb-8">
-                      <h4 className="font-orbitron text-sm font-bold text-primary uppercase tracking-wider mb-4">
+                    <div className="mb-6">
+                      <h4 className="font-orbitron text-sm font-bold text-primary uppercase tracking-wider mb-3">
                         Specifications
                       </h4>
-                      <div className="space-y-5">
+                      <div className="space-y-3">
                         {categoryFilters.map((group) => (
                           <div key={group.id}>
-                            <h5 className="mb-2 font-rajdhani text-sm font-semibold text-foreground">
+                            <h5 className="mb-1.5 font-rajdhani text-sm font-semibold text-foreground">
                               {group.feature_key}
                             </h5>
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                               {group.values.map((value) => {
                                 const isChecked = selectedKeyFeatures.some(
                                   (kf) => kf.id === group.id && kf.values.includes(value)
@@ -427,13 +428,13 @@ const ProductsPage: React.FC = () => {
 
                   {/* Sort */}
                   <div>
-                    <h4 className="font-orbitron text-sm font-bold text-primary uppercase tracking-wider mb-4">
+                    <h4 className="font-orbitron text-sm font-bold text-primary uppercase tracking-wider mb-3">
                       Sort By
                     </h4>
                     <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value)}
-                      className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground focus:outline-none focus:border-primary"
+                      className="w-full px-3.5 py-2 text-sm rounded-lg bg-muted border border-border text-foreground focus:outline-none focus:border-primary"
                     >
                       <option value="featured">Featured</option>
                       <option value="newest">Newest</option>

@@ -48,7 +48,7 @@ const FeaturedGamingPcsSection: React.FC = () => {
       id: `gaming-pc-${gamingPc.id}`,
       name: gamingPc.name,
       category: 'Gaming PC',
-      price: gamingPc.price,
+      price: Number(gamingPc.price),
       image: gamingPc.images[0] || '',
       media: gamingPc.images.slice(1).map((url) => ({ url, type: 'image' as const })),
       description: gamingPc.description || undefined,

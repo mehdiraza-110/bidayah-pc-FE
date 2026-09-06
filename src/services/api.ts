@@ -134,6 +134,28 @@ export interface UpdateStoreLocationRequest {
   is_active?: boolean;
 }
 
+// Contact message interfaces — public "Contact Us" submissions, reviewed by
+// the admin in a read/unread inbox.
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  subject: string | null;
+  message: string;
+  is_read: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateContactMessageRequest {
+  name: string;
+  email: string;
+  phone?: string;
+  subject?: string;
+  message: string;
+}
+
 // Category interfaces
 export interface Category {
   id: string;
@@ -231,6 +253,50 @@ export interface CreateBlogRequest {
 export type UpdateBlogRequest = Partial<CreateBlogRequest>;
 
 export interface BlogFilters {
+  status?: 'published' | 'draft';
+  featured?: boolean;
+  limit?: number;
+}
+
+// News — a separate content type from Blog, same shape, own admin section
+// and own public listing/detail pages.
+export interface NewsPost {
+  id: string;
+  title: string;
+  slug?: string;
+  category?: string; // Free-text tag — not tied to product categories
+  excerpt?: string;
+  content: string; // Rich-text HTML
+  featured_image?: string;
+  status: 'published' | 'draft';
+  featured?: boolean;
+  // SEO — fully admin-controlled, independent of the post's own title/excerpt/image
+  seo_title?: string;
+  seo_description?: string;
+  seo_keywords?: string;
+  og_image?: string;
+  published_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateNewsRequest {
+  title: string;
+  content: string;
+  category?: string;
+  excerpt?: string;
+  featured_image?: File | string;
+  status?: 'published' | 'draft';
+  featured?: boolean;
+  seo_title?: string;
+  seo_description?: string;
+  seo_keywords?: string;
+  og_image?: File | string;
+}
+
+export type UpdateNewsRequest = Partial<CreateNewsRequest>;
+
+export interface NewsFilters {
   status?: 'published' | 'draft';
   featured?: boolean;
   limit?: number;
@@ -560,6 +626,10 @@ export interface FeaturedGamingPcProduct {
   // How many of this product this build includes — lets the same product
   // appear more than once (e.g. 2x RAM sticks).
   quantity: number;
+  // This component's own photo gallery — lets the "What's Included" card
+  // show a hover preview beyond its single thumbnail, same as a regular
+  // product card.
+  media?: ProductMedia[];
 }
 
 export interface FeaturedGamingPc {
@@ -610,6 +680,11 @@ export interface CreateFeaturedGamingPcRequest {
   fps_settings_label?: string;
 }
 
+/** One slot in the gallery, in display order — slot 0 is the cover photo. */
+export type FeaturedGamingPcImageOrderItem =
+  | { type: 'existing'; url: string }
+  | { type: 'new' };
+
 export interface UpdateFeaturedGamingPcRequest {
   name?: string;
   description?: string | null;
@@ -617,8 +692,14 @@ export interface UpdateFeaturedGamingPcRequest {
   key_features?: string[];
   is_active?: boolean;
   display_order?: number;
-  /** Omit to leave the existing gallery untouched; provide to fully replace it (still 1-5 images). */
+  /** New files to upload this request, in the order referenced by image_order's "new" slots. */
   images?: File[];
+  /**
+   * Full desired gallery order/composition (1-5 slots) mixing kept existing
+   * image URLs with "new" placeholders consumed in order from `images`.
+   * Omit both `images` and `image_order` to leave the gallery untouched.
+   */
+  image_order?: FeaturedGamingPcImageOrderItem[];
   products?: FeaturedGamingPcProductSelection[];
   /** Empty string clears the field (unassigns from its series type, etc). */
   series_type_id?: string;
@@ -683,6 +764,11 @@ export interface PcSeries {
   // endpoints (getAll/getActiveOrdered).
   price_from?: number | null;
   price_to?: number | null;
+  // card_image, followed by the cover photo of each active tier/color build
+  // under this series (deduped) — only present on getActiveOrdered (the
+  // public homepage list). Lets the homepage card cycle through spec-tier/
+  // color variants on hover, like a product card cycles its gallery.
+  card_images?: string[];
   types?: PcSeriesType[];
   created_at: string;
   updated_at: string;
@@ -998,6 +1084,41 @@ export const deleteStoreLocation = async (id: string): Promise<ApiResponse<Store
   });
 };
 
+// Contact message APIs
+
+// Public — submit the "Contact Us" form. Uses apiRequest (not
+// publicApiRequest, which always prefixes `/public` — a separate router this
+// endpoint isn't mounted under) since the endpoint has no auth requirement
+// either way, same as how checkout's order creation calls its endpoint directly.
+export const createContactMessage = async (data: CreateContactMessageRequest): Promise<ApiResponse<ContactMessage>> => {
+  return apiRequest<ContactMessage>('/contact-messages', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+// Admin — inbox list
+export const getContactMessages = async (): Promise<ApiResponse<ContactMessage[]>> => {
+  return apiRequest<ContactMessage[]>('/contact-messages', {
+    method: 'GET',
+  });
+};
+
+// Admin — mark a message read/unread
+export const setContactMessageRead = async (id: string, isRead: boolean): Promise<ApiResponse<ContactMessage>> => {
+  return apiRequest<ContactMessage>(`/contact-messages/${id}/read`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_read: isRead }),
+  });
+};
+
+// Admin — delete a message
+export const deleteContactMessage = async (id: string): Promise<ApiResponse<ContactMessage>> => {
+  return apiRequest<ContactMessage>(`/contact-messages/${id}`, {
+    method: 'DELETE',
+  });
+};
+
 // Category APIs
 
 // Get all categories
@@ -1277,6 +1398,253 @@ export const updateBlog = async (id: string, blogData: UpdateBlogRequest): Promi
 export const deleteBlog = async (id: string): Promise<ApiResponse<Blog>> => {
   return apiRequest<Blog>(`/blogs/${id}`, {
     method: 'DELETE',
+  });
+};
+
+// News APIs
+
+const buildNewsQuery = (filters?: NewsFilters): string => {
+  const params = new URLSearchParams();
+  if (filters?.status) params.append('status', filters.status);
+  if (filters?.featured !== undefined) params.append('featured', String(filters.featured));
+  if (filters?.limit !== undefined) params.append('limit', String(filters.limit));
+
+  const queryString = params.toString();
+  return queryString ? `?${queryString}` : '';
+};
+
+export const getNewsList = async (filters?: NewsFilters): Promise<ApiResponse<NewsPost[]>> => {
+  return apiRequest<NewsPost[]>(`/news${buildNewsQuery(filters)}`, {
+    method: 'GET',
+  });
+};
+
+export const getNewsById = async (id: string): Promise<ApiResponse<NewsPost>> => {
+  return apiRequest<NewsPost>(`/news/${id}`, {
+    method: 'GET',
+  });
+};
+
+// Either image field can be a File (upload) or a string/undefined (URL or unset).
+const appendNewsFormData = (formData: FormData, newsData: CreateNewsRequest | UpdateNewsRequest) => {
+  if (newsData.title !== undefined) formData.append('title', newsData.title);
+  if (newsData.content !== undefined) formData.append('content', newsData.content);
+  if (newsData.category !== undefined) formData.append('category', newsData.category || '');
+  if (newsData.excerpt !== undefined) formData.append('excerpt', newsData.excerpt || '');
+  if (newsData.status !== undefined) formData.append('status', newsData.status);
+  if (newsData.featured !== undefined) formData.append('featured', String(newsData.featured));
+  if (newsData.seo_title !== undefined) formData.append('seo_title', newsData.seo_title || '');
+  if (newsData.seo_description !== undefined) formData.append('seo_description', newsData.seo_description || '');
+  if (newsData.seo_keywords !== undefined) formData.append('seo_keywords', newsData.seo_keywords || '');
+
+  if (newsData.featured_image instanceof File) {
+    formData.append('featured_image', newsData.featured_image);
+  } else if (typeof newsData.featured_image === 'string') {
+    formData.append('featured_image', newsData.featured_image);
+  }
+  if (newsData.og_image instanceof File) {
+    formData.append('og_image', newsData.og_image);
+  } else if (typeof newsData.og_image === 'string') {
+    formData.append('og_image', newsData.og_image);
+  }
+};
+
+export const createNews = async (newsData: CreateNewsRequest): Promise<ApiResponse<NewsPost>> => {
+  const hasFile = newsData.featured_image instanceof File || newsData.og_image instanceof File;
+
+  if (hasFile) {
+    const formData = new FormData();
+    appendNewsFormData(formData, newsData);
+
+    return apiRequest<NewsPost>('/news', { method: 'POST', body: formData }, true);
+  }
+
+  const body: Record<string, unknown> = {
+    title: newsData.title,
+    content: newsData.content,
+  };
+  if (newsData.category !== undefined) body.category = newsData.category;
+  if (newsData.excerpt !== undefined) body.excerpt = newsData.excerpt;
+  if (newsData.status !== undefined) body.status = newsData.status;
+  if (newsData.featured !== undefined) body.featured = newsData.featured;
+  if (newsData.seo_title !== undefined) body.seo_title = newsData.seo_title;
+  if (newsData.seo_description !== undefined) body.seo_description = newsData.seo_description;
+  if (newsData.seo_keywords !== undefined) body.seo_keywords = newsData.seo_keywords;
+  if (typeof newsData.featured_image === 'string') body.featured_image = newsData.featured_image;
+  if (typeof newsData.og_image === 'string') body.og_image = newsData.og_image;
+
+  return apiRequest<NewsPost>('/news', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+};
+
+export const updateNews = async (id: string, newsData: UpdateNewsRequest): Promise<ApiResponse<NewsPost>> => {
+  const hasFile = newsData.featured_image instanceof File || newsData.og_image instanceof File;
+
+  if (hasFile) {
+    const formData = new FormData();
+    appendNewsFormData(formData, newsData);
+
+    return apiRequest<NewsPost>(`/news/${id}`, { method: 'PUT', body: formData }, true);
+  }
+
+  const body: Record<string, unknown> = {};
+  if (newsData.title !== undefined) body.title = newsData.title;
+  if (newsData.content !== undefined) body.content = newsData.content;
+  if (newsData.category !== undefined) body.category = newsData.category;
+  if (newsData.excerpt !== undefined) body.excerpt = newsData.excerpt;
+  if (newsData.status !== undefined) body.status = newsData.status;
+  if (newsData.featured !== undefined) body.featured = newsData.featured;
+  if (newsData.seo_title !== undefined) body.seo_title = newsData.seo_title;
+  if (newsData.seo_description !== undefined) body.seo_description = newsData.seo_description;
+  if (newsData.seo_keywords !== undefined) body.seo_keywords = newsData.seo_keywords;
+  if (typeof newsData.featured_image === 'string') body.featured_image = newsData.featured_image;
+  if (typeof newsData.og_image === 'string') body.og_image = newsData.og_image;
+
+  return apiRequest<NewsPost>(`/news/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+};
+
+export const deleteNews = async (id: string): Promise<ApiResponse<NewsPost>> => {
+  return apiRequest<NewsPost>(`/news/${id}`, {
+    method: 'DELETE',
+  });
+};
+
+// Team page APIs — banner (singleton) + team member roster
+
+export interface TeamPageBanner {
+  id: string;
+  image_url: string | null;
+  heading: string;
+  subtext: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface UpsertTeamPageBannerRequest {
+  heading: string;
+  subtext?: string;
+  image?: File | string;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  bio: string | null;
+  photo_url: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateTeamMemberRequest {
+  name: string;
+  role: string;
+  bio?: string;
+  photo?: File | string;
+  is_active?: boolean;
+}
+
+export type UpdateTeamMemberRequest = Partial<CreateTeamMemberRequest>;
+
+export const getTeamBanner = async (): Promise<ApiResponse<TeamPageBanner | null>> => {
+  return apiRequest<TeamPageBanner | null>('/team/banner', {
+    method: 'GET',
+  });
+};
+
+export const upsertTeamBanner = async (data: UpsertTeamPageBannerRequest): Promise<ApiResponse<TeamPageBanner>> => {
+  if (data.image instanceof File) {
+    const formData = new FormData();
+    formData.append('heading', data.heading);
+    formData.append('subtext', data.subtext || '');
+    formData.append('image', data.image);
+
+    return apiRequest<TeamPageBanner>('/team/banner', { method: 'PUT', body: formData }, true);
+  }
+
+  const body: Record<string, unknown> = { heading: data.heading, subtext: data.subtext || '' };
+  if (typeof data.image === 'string') body.image_url = data.image;
+
+  return apiRequest<TeamPageBanner>('/team/banner', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+};
+
+export const getTeamMembers = async (): Promise<ApiResponse<TeamMember[]>> => {
+  return apiRequest<TeamMember[]>('/team/members', {
+    method: 'GET',
+  });
+};
+
+const appendTeamMemberFormData = (formData: FormData, data: CreateTeamMemberRequest | UpdateTeamMemberRequest) => {
+  if (data.name !== undefined) formData.append('name', data.name);
+  if (data.role !== undefined) formData.append('role', data.role);
+  if (data.bio !== undefined) formData.append('bio', data.bio || '');
+  if (data.is_active !== undefined) formData.append('is_active', String(data.is_active));
+
+  if (data.photo instanceof File) {
+    formData.append('photo', data.photo);
+  } else if (typeof data.photo === 'string') {
+    formData.append('photo_url', data.photo);
+  }
+};
+
+export const createTeamMember = async (data: CreateTeamMemberRequest): Promise<ApiResponse<TeamMember>> => {
+  if (data.photo instanceof File) {
+    const formData = new FormData();
+    appendTeamMemberFormData(formData, data);
+    return apiRequest<TeamMember>('/team/members', { method: 'POST', body: formData }, true);
+  }
+
+  const body: Record<string, unknown> = { name: data.name, role: data.role };
+  if (data.bio !== undefined) body.bio = data.bio;
+  if (data.is_active !== undefined) body.is_active = data.is_active;
+  if (typeof data.photo === 'string') body.photo_url = data.photo;
+
+  return apiRequest<TeamMember>('/team/members', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+};
+
+export const updateTeamMember = async (id: string, data: UpdateTeamMemberRequest): Promise<ApiResponse<TeamMember>> => {
+  if (data.photo instanceof File) {
+    const formData = new FormData();
+    appendTeamMemberFormData(formData, data);
+    return apiRequest<TeamMember>(`/team/members/${id}`, { method: 'PUT', body: formData }, true);
+  }
+
+  const body: Record<string, unknown> = {};
+  if (data.name !== undefined) body.name = data.name;
+  if (data.role !== undefined) body.role = data.role;
+  if (data.bio !== undefined) body.bio = data.bio;
+  if (data.is_active !== undefined) body.is_active = data.is_active;
+  if (typeof data.photo === 'string') body.photo_url = data.photo;
+
+  return apiRequest<TeamMember>(`/team/members/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+};
+
+export const deleteTeamMember = async (id: string): Promise<ApiResponse<TeamMember>> => {
+  return apiRequest<TeamMember>(`/team/members/${id}`, {
+    method: 'DELETE',
+  });
+};
+
+export const reorderTeamMembers = async (items: { id: string; display_order: number }[]): Promise<ApiResponse<TeamMember[]>> => {
+  return apiRequest<TeamMember[]>('/team/members/reorder', {
+    method: 'PUT',
+    body: JSON.stringify({ items }),
   });
 };
 
@@ -1748,6 +2116,7 @@ export const updateFeaturedGamingPc = async (
   if (data.fps_score !== undefined) formData.append('fps_score', data.fps_score === null ? '' : String(data.fps_score));
   if (data.fps_settings_label !== undefined) formData.append('fps_settings_label', data.fps_settings_label);
   if (data.images !== undefined) data.images.forEach((file) => formData.append('images', file));
+  if (data.image_order !== undefined) formData.append('image_order', JSON.stringify(data.image_order));
 
   return apiRequest<FeaturedGamingPc>(
     `/featured-gaming-pcs/${id}`,
@@ -2062,6 +2431,41 @@ export const getPublicBlogBySlug = async (slug: string): Promise<ApiResponse<Blo
   });
 };
 
+// Public News APIs (published posts only — enforced server-side)
+export const getPublicNews = async (filters?: Pick<NewsFilters, 'featured' | 'limit'>): Promise<ApiResponse<NewsPost[]>> => {
+  const params = new URLSearchParams();
+  if (filters?.featured !== undefined) params.append('featured', String(filters.featured));
+  if (filters?.limit !== undefined) params.append('limit', String(filters.limit));
+  const queryString = params.toString();
+
+  return publicApiRequest<NewsPost[]>(`/news${queryString ? `?${queryString}` : ''}`, {
+    method: 'GET',
+  });
+};
+
+export const getPublicFeaturedNews = async (limit?: number): Promise<ApiResponse<NewsPost[]>> => {
+  return getPublicNews({ featured: true, limit });
+};
+
+export const getPublicNewsBySlug = async (slug: string): Promise<ApiResponse<NewsPost>> => {
+  return publicApiRequest<NewsPost>(`/news/slug/${slug}`, {
+    method: 'GET',
+  });
+};
+
+// Public Team Page APIs
+export const getPublicTeamBanner = async (): Promise<ApiResponse<TeamPageBanner | null>> => {
+  return publicApiRequest<TeamPageBanner | null>('/team/banner', {
+    method: 'GET',
+  });
+};
+
+export const getPublicTeamMembers = async (): Promise<ApiResponse<TeamMember[]>> => {
+  return publicApiRequest<TeamMember[]>('/team/members', {
+    method: 'GET',
+  });
+};
+
 // Public PC Builder APIs
 export const getPublicPCBuilderOptions = async (): Promise<ApiResponse<PCBuilderOptions>> => {
   return publicApiRequest<PCBuilderOptions>('/pc-builder/options', {
@@ -2202,27 +2606,15 @@ export interface BankTransferCheckoutRequest {
   payment_screenshot: File;
 }
 
+// Checkout only collects one combined name/email/phone/address — used for
+// both shipping and billing — and no payment method; every order goes to
+// agent_review so a sales agent can quote the final price afterward.
 export interface AgentCheckoutRequest {
-  shipping_first_name: string;
-  shipping_last_name: string;
-  shipping_email: string;
-  shipping_phone: string;
-  shipping_address: string;
-  shipping_city: string;
-  shipping_state: string;
-  shipping_zip_code: string;
-  shipping_country: string;
-  billing_first_name: string;
-  billing_last_name: string;
-  billing_email: string;
-  billing_address: string;
-  billing_city: string;
-  billing_state: string;
-  billing_zip_code: string;
-  billing_country: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
   items: OrderItem[];
-  shipping?: number;
-  tax?: number;
 }
 
 // Helper function for public order endpoints (without /public prefix)
@@ -2313,16 +2705,13 @@ export const createBankTransferOrder = async (
   }, true); // Skip JSON content type for FormData
 };
 
-// Agent Payment Checkout (application/json)
+// Checkout (application/json) — always creates an agent_review order.
 export const createAgentOrder = async (
   orderData: AgentCheckoutRequest
 ): Promise<ApiResponse<Order>> => {
-  // Remove shipping and tax as they're automatically calculated by backend
-  const { shipping, tax, ...orderPayload } = orderData;
-  
   return publicOrderRequest<Order>('/orders/agent', {
     method: 'POST',
-    body: JSON.stringify(orderPayload),
+    body: JSON.stringify(orderData),
   });
 };
 

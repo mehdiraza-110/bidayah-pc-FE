@@ -39,7 +39,7 @@ const DEFAULT_HERO_CONTENT: HeroContent = {
   mode: 'single',
   headline_line_1: 'Gaming PCs,',
   headline_line_2: 'Built To Win.',
-  subtext: 'Hand-built rigs with real component transparency and a 3-year warranty. Configure your own build or shop ready-to-ship systems today.',
+  subtext: 'Hand-built rigs with real component transparency and a 1-year warranty. Configure your own build or shop ready-to-ship systems today.',
   button_1_text: 'Shop Gaming PCs',
   button_1_link: '/products',
   button_2_text: 'Start Custom Build',

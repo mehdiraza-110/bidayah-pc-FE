@@ -154,7 +154,7 @@ const AdminAnalyticsPage: React.FC = () => {
     },
     {
       label: 'Revenue',
-      value: `AED ${statistics.total_revenue_this_month.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: `AED ${Number(statistics.total_revenue_this_month).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       subtitle: `This Month (${statistics.month})`,
       icon: DollarSign,
       color: 'green',
@@ -282,7 +282,7 @@ const AdminAnalyticsPage: React.FC = () => {
                           <div className="mb-3 pb-2 border-b border-border">
                             <p className="font-orbitron font-semibold text-sm mb-1">{data.monthFull}</p>
                             <p className="text-primary font-orbitron text-lg">
-                              AED {data.sales?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              AED {Number(data.sales ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </p>
                           </div>
                           {products.length > 0 ? (
@@ -304,7 +304,7 @@ const AdminAnalyticsPage: React.FC = () => {
                                       {product.sales_count} sold
                                     </p>
                                     <p className="text-muted-foreground text-xs">
-                                      AED {product.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      AED {Number(product.revenue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </p>
                                   </div>
                                 </div>
@@ -396,7 +396,7 @@ const AdminAnalyticsPage: React.FC = () => {
                     <div className="pt-2 border-t border-border">
                       <p className="text-sm text-muted-foreground">
                         Total Revenue: <span className="font-orbitron font-semibold text-primary">
-                          AED {product.total_revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          AED {Number(product.total_revenue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </p>
                     </div>
