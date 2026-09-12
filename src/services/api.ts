@@ -2781,6 +2781,27 @@ export const updateOrderStatus = async (id: string, status: string): Promise<Api
   });
 };
 
+// Full order edit (Admin) — customer info, shipping/tax, and the item list
+// (edit price/qty/components, add, remove). Items are replaced wholesale on
+// each save, so pass the complete desired item list, not a diff.
+export interface UpdateOrderRequest {
+  shipping_info?: Partial<Order['shipping_info']>;
+  billing_info?: Partial<Order['billing_info']>;
+  items: OrderItem[];
+  shipping?: number;
+  tax?: number;
+  // Normally derived as subtotal+shipping+tax; pass this to have the admin's
+  // typed-in final price win instead (e.g. a manual discount/custom quote).
+  total?: number;
+}
+
+export const updateOrder = async (id: string, data: UpdateOrderRequest): Promise<ApiResponse<Order>> => {
+  return apiRequest<Order>(`/orders/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+};
+
 // Statistics APIs
 
 export interface DashboardStatistics {

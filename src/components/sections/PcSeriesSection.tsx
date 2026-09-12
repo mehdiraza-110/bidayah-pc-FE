@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { getPublicPcSeriesList, type PcSeries } from '@/services/api';
 import { GSAPScrollReveal } from '@/components/effects/GSAPScrollReveal';
-import { Loader } from '@/components/ui/Loader';
 import { Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +38,22 @@ const formatPriceRange = (series: PcSeries) => {
 
 // How often the image swaps while a card is hovered — matches ProductCard.
 const HOVER_CYCLE_MS = 2200;
+
+// Shaped like SeriesCard below (same image aspect ratio, badge pill, title/
+// price/button lines) so the grid doesn't jump when the real cards arrive.
+const SeriesCardSkeleton: React.FC = () => (
+  <div className="flex h-full flex-col">
+    <div className="relative aspect-[4/3] animate-pulse overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="absolute top-4 right-4 h-6 w-20 rounded-full bg-muted" />
+    </div>
+    <div className="pt-5 flex flex-col items-center gap-2">
+      <div className="h-6 w-32 rounded bg-muted animate-pulse" />
+      <div className="h-4 w-40 rounded bg-muted animate-pulse" />
+      <div className="h-4 w-24 rounded bg-muted animate-pulse mb-2" />
+      <div className="h-9 w-28 rounded-full border border-border bg-muted/60 animate-pulse" />
+    </div>
+  </div>
+);
 
 interface SeriesCardProps {
   series: PcSeries;
@@ -194,15 +209,13 @@ const PcSeriesSection: React.FC = () => {
           </div>
         </GSAPScrollReveal>
 
-        {isLoading ? (
-          <Loader label="Loading PC series..." />
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {seriesList.map((series, index) => (
-              <SeriesCard key={series.id} series={series} index={index} />
-            ))}
-          </div>
-        )}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {isLoading
+            ? Array.from({ length: 3 }).map((_, i) => <SeriesCardSkeleton key={i} />)
+            : seriesList.map((series, index) => (
+                <SeriesCard key={series.id} series={series} index={index} />
+              ))}
+        </div>
       </div>
     </section>
   );
