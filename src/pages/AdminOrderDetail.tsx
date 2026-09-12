@@ -18,6 +18,7 @@ import {
   FileText,
   Image as ImageIcon,
   Save,
+  Cpu,
 } from 'lucide-react';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { NeonCard } from '@/components/ui/NeonCard';
@@ -262,6 +263,42 @@ const AdminOrderDetailPage: React.FC = () => {
                         <span>Price: AED {Number(item.price).toLocaleString()}</span>
                         <span className="font-semibold text-foreground">Subtotal: AED {Number(item.subtotal).toLocaleString()}</span>
                       </div>
+
+                      {/* Itemized breakdown for bundled items (Custom PC Build,
+                          prebuilt Gaming PC bundles) — shows what's actually
+                          inside the single line item above. */}
+                      {!!item.components?.length && (
+                        <div className="mt-3 pt-3 border-t border-border/60">
+                          <div className="flex items-center gap-2 mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <Cpu className="w-3.5 h-3.5" />
+                            Components ({item.components.length})
+                          </div>
+                          <div className="space-y-1.5">
+                            {item.components.map((component, componentIndex) => (
+                              <div
+                                key={componentIndex}
+                                className="flex items-center justify-between gap-3 text-sm"
+                              >
+                                <span className="text-foreground">
+                                  <span className="text-muted-foreground">{component.category}:</span>{' '}
+                                  {component.name}
+                                  {component.quantity > 1 && (
+                                    <span className="text-muted-foreground"> ×{component.quantity}</span>
+                                  )}
+                                  {component.vendor && (
+                                    <span className="text-muted-foreground"> ({component.vendor})</span>
+                                  )}
+                                </span>
+                                {typeof component.price === 'number' && component.price > 0 && (
+                                  <span className="text-muted-foreground whitespace-nowrap">
+                                    AED {component.price.toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 ))}

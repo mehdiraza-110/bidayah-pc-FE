@@ -103,6 +103,9 @@ const CheckoutPage: React.FC = () => {
         category: item.category,
         vendor_id: item.vendor_id,
         image: item.image,
+        // Itemized part breakdown for bundled items (Custom PC Build, prebuilt
+        // Gaming PC bundles) so the admin order view can show what's inside.
+        components: item.components,
       }));
 
       // Every order goes to agent_review — a sales agent quotes the final

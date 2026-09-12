@@ -2535,6 +2535,17 @@ export const getPublicBillingInfo = async (): Promise<ApiResponse<BillingInfo>> 
   });
 };
 
+// Itemized part breakdown for a bundled order item (Custom PC Build, prebuilt
+// Gaming PC bundle), so the admin order view can show what's inside instead
+// of a single flat line.
+export interface OrderItemComponent {
+  category: string;
+  name: string;
+  vendor?: string;
+  quantity: number;
+  price?: number;
+}
+
 // Order interfaces
 export interface OrderItem {
   id: string;
@@ -2544,6 +2555,7 @@ export interface OrderItem {
   category?: string;
   vendor_id?: string;
   image?: string;
+  components?: OrderItemComponent[] | null;
 }
 
 export interface Order {

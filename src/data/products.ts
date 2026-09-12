@@ -8,6 +8,16 @@ export interface ProductKeyFeature {
   value: string;
 }
 
+// Itemized breakdown for a bundled/custom-built product (e.g. a PC Builder
+// "Custom PC Build"), one entry per component that makes up the bundle.
+export interface BuildComponent {
+  category: string;
+  name: string;
+  vendor?: string;
+  quantity: number;
+  price?: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -19,6 +29,7 @@ export interface Product {
   media?: ProductMedia[]; // Array of media (images/videos, max 5)
   description?: string; // Rich text description
   specs: string[];
+  components?: BuildComponent[]; // Structured part breakdown, set for bundled/custom-build items
   keyFeatures?: ProductKeyFeature[];
   rating: number;
   reviews: number;

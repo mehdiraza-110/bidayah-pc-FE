@@ -89,6 +89,12 @@ const TierCard: React.FC<TierCardProps> = ({ tier, selectedColorName }) => {
       const label = p.category_name ? `${p.category_name}: ${p.name}` : p.name;
       return p.quantity > 1 ? `${label} ×${p.quantity}` : label;
     }),
+    components: pc.products.map((p) => ({
+      category: p.category_name || 'Component',
+      name: p.name,
+      quantity: p.quantity,
+      price: Number(p.price || 0),
+    })),
     rating: 5.0,
     reviews: 0,
     stock: 1,

@@ -324,6 +324,20 @@ const GamingPcDetailPage: React.FC = () => {
           return quantity > 1 ? `${label} ×${quantity}` : label;
         }),
       ],
+      components: [
+        ...pc.products.map((p) => ({
+          category: p.category_name || 'Component',
+          name: p.name,
+          quantity: p.quantity,
+          price: Number(p.price || 0),
+        })),
+        ...extras.map(({ product, quantity }) => ({
+          category: 'Add-on',
+          name: product.name,
+          quantity,
+          price: Number(product.price || 0),
+        })),
+      ],
       rating: 5.0,
       reviews: 0,
       stock: 1,

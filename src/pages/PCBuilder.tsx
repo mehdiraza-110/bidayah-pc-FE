@@ -484,6 +484,13 @@ const PCBuilderPage: React.FC = () => {
         const qtySuffix = quantity > 1 ? ` ×${quantity}` : '';
         return (vendor ? `${categoryName}: ${product.name} (${vendor.vendor_name})` : `${categoryName}: ${product.name}`) + qtySuffix;
       }),
+      components: selectedItems.map(({ product, vendor, quantity }) => ({
+        category: product.category_name || categories.find(category => category.id === product.category_id)?.category_name || 'Component',
+        name: product.name,
+        vendor: vendor?.vendor_name,
+        quantity,
+        price: Number(product.price || 0),
+      })),
       rating: 5.0,
       reviews: 0,
       stock: 1,
