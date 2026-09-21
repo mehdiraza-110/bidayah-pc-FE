@@ -1875,6 +1875,30 @@ export const bulkDeleteProducts = async (
   });
 };
 
+// Bulk update price
+export interface BulkUpdatePriceRequest {
+  scope: 'all' | 'category' | 'vendor';
+  category_id?: string;
+  vendor_id?: string;
+  direction: 'increase' | 'decrease';
+  type: 'percentage' | 'value';
+  amount: number;
+}
+
+export interface BulkUpdatePriceResult {
+  updatedCount: number;
+  updatedIds: string[];
+}
+
+export const bulkUpdatePrice = async (
+  payload: BulkUpdatePriceRequest
+): Promise<ApiResponse<BulkUpdatePriceResult>> => {
+  return apiRequest<BulkUpdatePriceResult>('/products/bulk-update-price', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
 // PC Builder Filter Rule APIs
 const buildFilterRuleQuery = (
   filters?: PCBuilderFilterRuleFilters | PreviewPCBuilderFilterRuleFilters

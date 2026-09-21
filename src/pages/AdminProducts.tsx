@@ -46,6 +46,7 @@ import {
   updateProduct,
   deleteProduct,
   bulkDeleteProducts,
+  bulkUpdatePrice as bulkUpdatePriceApi,
   getKeyFeatures,
   type Vendor, 
   type Category,
@@ -153,6 +154,17 @@ const AdminProductsPage: React.FC = () => {
   const [isBulkSaving, setIsBulkSaving] = useState(false);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [editingPriceValue, setEditingPriceValue] = useState('');
+  const [isSavingPrice, setIsSavingPrice] = useState(false);
+  const [isBulkPriceOpen, setIsBulkPriceOpen] = useState(false);
+  const [bulkPriceScope, setBulkPriceScope] = useState<'all' | 'category' | 'vendor'>('all');
+  const [bulkPriceCategory, setBulkPriceCategory] = useState('');
+  const [bulkPriceVendor, setBulkPriceVendor] = useState('');
+  const [bulkPriceDirection, setBulkPriceDirection] = useState<'increase' | 'decrease'>('increase');
+  const [bulkPriceType, setBulkPriceType] = useState<'percentage' | 'value'>('percentage');
+  const [bulkPriceAmount, setBulkPriceAmount] = useState('');
+  const [isBulkPriceSaving, setIsBulkPriceSaving] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Product & { category_id?: string }>>({
     name: '',
@@ -728,6 +740,108 @@ const AdminProductsPage: React.FC = () => {
     }
   };
 
+  const handleStartEditPrice = (product: Product) => {
+    setEditingPriceId(product.id);
+    setEditingPriceValue(String(product.price));
+  };
+
+  const handleCancelEditPrice = () => {
+    setEditingPriceId(null);
+    setEditingPriceValue('');
+  };
+
+  const handleSavePrice = async (productId: string) => {
+    const newPrice = parseFloat(editingPriceValue);
+    if (isNaN(newPrice) || newPrice < 0) {
+      toast.error('Please enter a valid price');
+      return;
+    }
+
+    setIsSavingPrice(true);
+    const response = await updateProduct(productId, { price: newPrice });
+    setIsSavingPrice(false);
+
+    if (response.success && response.data) {
+      const updatedProduct = mapApiProductToLocal(response.data);
+      setProductList(prev =>
+        prev.map(p => (p.id === productId ? updatedProduct : p))
+      );
+      toast.success(response.message || 'Price updated successfully');
+      setEditingPriceId(null);
+      setEditingPriceValue('');
+    } else {
+      toast.error(response.message || 'Failed to update price');
+    }
+  };
+
+  const getBulkPriceTargets = () => {
+    if (bulkPriceScope === 'category') {
+      const categoryName = categoryList.find(c => c.id === bulkPriceCategory)?.category_name;
+      return productList.filter(p => p.category === categoryName);
+    }
+    if (bulkPriceScope === 'vendor') {
+      return productList.filter(p => p.vendor_id === bulkPriceVendor);
+    }
+    return productList;
+  };
+
+  const bulkPriceTargets = getBulkPriceTargets();
+
+  const handleBulkPriceApply = async () => {
+    const amount = parseFloat(bulkPriceAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    if (bulkPriceScope === 'category' && !bulkPriceCategory) {
+      toast.error('Please select a category');
+      return;
+    }
+    if (bulkPriceScope === 'vendor' && !bulkPriceVendor) {
+      toast.error('Please select a vendor');
+      return;
+    }
+
+    setIsBulkPriceSaving(true);
+    const response = await bulkUpdatePriceApi({
+      scope: bulkPriceScope,
+      category_id: bulkPriceScope === 'category' ? bulkPriceCategory : undefined,
+      vendor_id: bulkPriceScope === 'vendor' ? bulkPriceVendor : undefined,
+      direction: bulkPriceDirection,
+      type: bulkPriceType,
+      amount,
+    });
+
+    if (response.success && response.data) {
+      const { updatedCount } = response.data;
+      if (updatedCount > 0) {
+        toast.success(`Updated price for ${updatedCount} product${updatedCount === 1 ? '' : 's'}`);
+      } else {
+        toast.error('No products matched the selected scope');
+      }
+
+      const productsResponse = await getProducts();
+      if (productsResponse.success && productsResponse.data) {
+        const mappedProducts = productsResponse.data.map(product => ({
+          ...mapApiProductToLocal(product),
+          vendor_id: resolveProductVendorId(product, vendorList),
+        }));
+        setProductList(mappedProducts);
+      }
+    } else {
+      toast.error(response.message || 'Failed to update prices');
+    }
+
+    setIsBulkPriceSaving(false);
+    setIsBulkPriceOpen(false);
+    setBulkPriceScope('all');
+    setBulkPriceCategory('');
+    setBulkPriceVendor('');
+    setBulkPriceDirection('increase');
+    setBulkPriceType('percentage');
+    setBulkPriceAmount('');
+  };
+
   // Filter and search products
   const filteredProducts = productList.filter(product => {
     // Search filter
@@ -929,6 +1043,10 @@ const AdminProductsPage: React.FC = () => {
                     <List className="w-4 h-4" />
                   </button>
                 </div>
+                <CyberButton size="md" variant="outline" onClick={() => setIsBulkPriceOpen(true)}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  BULK UPDATE PRICE
+                </CyberButton>
                 <CyberButton size="md" glowColor="cyan" onClick={handleNewProduct}>
                   <Plus className="w-4 h-4 mr-2" />
                   NEW PRODUCT
@@ -1548,7 +1666,47 @@ const AdminProductsPage: React.FC = () => {
                                 {vendorList.find(v => v.id === product.vendor_id)?.vendor_name || '—'}
                               </td>
                               <td className="px-2 py-3 font-orbitron text-primary whitespace-nowrap">
-                                AED {product.price.toLocaleString()}
+                                {editingPriceId === product.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <Input
+                                      type="number"
+                                      autoFocus
+                                      value={editingPriceValue}
+                                      onChange={(e) => setEditingPriceValue(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleSavePrice(product.id);
+                                        if (e.key === 'Escape') handleCancelEditPrice();
+                                      }}
+                                      className="h-7 w-24 text-sm"
+                                      disabled={isSavingPrice}
+                                    />
+                                    <button
+                                      onClick={() => handleSavePrice(product.id)}
+                                      disabled={isSavingPrice}
+                                      className="p-1 rounded border border-green-500 text-green-500 hover:bg-green-500/10 transition-colors shrink-0"
+                                    >
+                                      <Save className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={handleCancelEditPrice}
+                                      disabled={isSavingPrice}
+                                      className="p-1 rounded border border-border text-foreground hover:bg-muted transition-colors shrink-0"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1 group">
+                                    AED {product.price.toLocaleString()}
+                                    <button
+                                      onClick={() => handleStartEditPrice(product)}
+                                      className="p-0.5 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors opacity-60 group-hover:opacity-100"
+                                      title="Quick edit price"
+                                    >
+                                      <Edit className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )}
                               </td>
                               <td className="px-2 py-3 whitespace-nowrap">
                                 {product.in_stock ? (
@@ -1618,9 +1776,49 @@ const AdminProductsPage: React.FC = () => {
                         )}
                       </div>
                       <h3 className="font-rajdhani font-semibold text-lg mb-2">{product.name}</h3>
-                        <p className="text-primary font-orbitron text-xl mb-2">
-                          AED {product.price.toLocaleString()}
-                        </p>
+                        {editingPriceId === product.id ? (
+                          <div className="flex items-center gap-1 mb-2">
+                            <Input
+                              type="number"
+                              autoFocus
+                              value={editingPriceValue}
+                              onChange={(e) => setEditingPriceValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSavePrice(product.id);
+                                if (e.key === 'Escape') handleCancelEditPrice();
+                              }}
+                              className="h-8 text-sm"
+                              disabled={isSavingPrice}
+                            />
+                            <button
+                              onClick={() => handleSavePrice(product.id)}
+                              disabled={isSavingPrice}
+                              className="p-1.5 rounded border border-green-500 text-green-500 hover:bg-green-500/10 transition-colors shrink-0"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={handleCancelEditPrice}
+                              disabled={isSavingPrice}
+                              className="p-1.5 rounded border border-border text-foreground hover:bg-muted transition-colors shrink-0"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 mb-2 group">
+                            <p className="text-primary font-orbitron text-xl">
+                              AED {product.price.toLocaleString()}
+                            </p>
+                            <button
+                              onClick={() => handleStartEditPrice(product)}
+                              className="p-1 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors opacity-60 group-hover:opacity-100"
+                              title="Quick edit price"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       <div className="flex items-center gap-2 mb-4 flex-wrap">
                         <span className={cn(
                           "px-2 py-1 text-xs rounded flex items-center gap-1",
@@ -1749,6 +1947,127 @@ const AdminProductsPage: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
+
+      <Dialog open={isBulkPriceOpen} onOpenChange={setIsBulkPriceOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Update Price</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="mb-2 block">Apply to</Label>
+              <select
+                value={bulkPriceScope}
+                onChange={(e) => setBulkPriceScope(e.target.value as 'all' | 'category' | 'vendor')}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="all">All Products</option>
+                <option value="category">Specific Category</option>
+                <option value="vendor">Specific Vendor</option>
+              </select>
+            </div>
+
+            {bulkPriceScope === 'category' && (
+              <div>
+                <Label htmlFor="bulk-price-category" className="mb-2 block">Category</Label>
+                <SearchableSelect
+                  id="bulk-price-category"
+                  value={bulkPriceCategory}
+                  onChange={setBulkPriceCategory}
+                  options={categoryList.map(cat => ({ value: cat.id, label: cat.category_name }))}
+                  placeholder="Select a category"
+                  searchPlaceholder="Search categories..."
+                />
+              </div>
+            )}
+
+            {bulkPriceScope === 'vendor' && (
+              <div>
+                <Label htmlFor="bulk-price-vendor" className="mb-2 block">Vendor</Label>
+                <SearchableSelect
+                  id="bulk-price-vendor"
+                  value={bulkPriceVendor}
+                  onChange={setBulkPriceVendor}
+                  options={vendorList.map(vendor => ({ value: vendor.id, label: vendor.vendor_name }))}
+                  placeholder="Select a vendor"
+                  searchPlaceholder="Search vendors..."
+                />
+              </div>
+            )}
+
+            <p className="text-sm text-muted-foreground">
+              {bulkPriceTargets.length} product{bulkPriceTargets.length === 1 ? '' : 's'} will be affected.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="mb-2 block">Direction</Label>
+                <select
+                  value={bulkPriceDirection}
+                  onChange={(e) => setBulkPriceDirection(e.target.value as 'increase' | 'decrease')}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="increase">Increase</option>
+                  <option value="decrease">Decrease</option>
+                </select>
+              </div>
+              <div>
+                <Label className="mb-2 block">By</Label>
+                <select
+                  value={bulkPriceType}
+                  onChange={(e) => setBulkPriceType(e.target.value as 'percentage' | 'value')}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="percentage">Percentage (%)</option>
+                  <option value="value">Fixed Amount (AED)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="bulk-price-amount" className="mb-2 block">
+                Amount {bulkPriceType === 'percentage' ? '(%)' : '(AED)'}
+              </Label>
+              <Input
+                id="bulk-price-amount"
+                type="number"
+                min="0"
+                step={bulkPriceType === 'percentage' ? '1' : '0.01'}
+                value={bulkPriceAmount}
+                onChange={(e) => setBulkPriceAmount(e.target.value)}
+                placeholder={bulkPriceType === 'percentage' ? 'e.g. 10' : 'e.g. 50'}
+                disabled={isBulkPriceSaving}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <CyberButton
+              type="button"
+              variant="outline"
+              onClick={() => setIsBulkPriceOpen(false)}
+              disabled={isBulkPriceSaving}
+            >
+              Cancel
+            </CyberButton>
+            <CyberButton
+              type="button"
+              onClick={handleBulkPriceApply}
+              disabled={
+                isBulkPriceSaving ||
+                !bulkPriceAmount ||
+                (bulkPriceScope === 'category' && !bulkPriceCategory) ||
+                (bulkPriceScope === 'vendor' && !bulkPriceVendor)
+              }
+            >
+              {isBulkPriceSaving ? (
+                <Loader size="sm" label="Applying..." />
+              ) : (
+                `Apply to ${bulkPriceTargets.length}`
+              )}
+            </CyberButton>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isBulkEditOpen} onOpenChange={setIsBulkEditOpen}>
         <DialogContent className="max-w-md">
