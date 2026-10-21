@@ -5,11 +5,11 @@ import gsap from 'gsap';
 import {
   ChevronLeft,
   ChevronRight,
+  Minus,
+  Plus,
   ShoppingCart,
   Share2,
   Check,
-  Minus,
-  Plus,
   Search,
   Truck,
   MapPin,
@@ -31,14 +31,16 @@ import {
   getPublicSiteSettings,
   getPublicStoreLocations,
   getPublicProducts,
+  getPublicProductById,
+  getPublicProductBySlug,
   type FeaturedGamingPc,
   type StoreLocation,
   type Product as CatalogProduct,
 } from '@/services/api';
-import { useCartStore } from '@/store/cartStore';
 import { Loader } from '@/components/ui/Loader';
 import { cn } from '@/lib/utils';
 import { isUuid, gamingPcUrl } from '@/lib/slug';
+import { openGamingPcInBuilder } from '@/lib/gamingPcBuilder';
 
 // One extra, optional product a shopper has added on top of the fixed build
 // — same "product + quantity" shape as the admin form's own product picker.
@@ -46,6 +48,35 @@ interface SelectedExtra {
   product: CatalogProduct;
   quantity: number;
 }
+
+// Shared-link format: `slug:qty` pairs, comma separated, qty omitted for 1.
+const parseSharedExtras = (raw: string | null): { key: string; quantity: number }[] =>
+  (raw || '')
+    .split(',')
+    .map((part) => {
+      const [key, qty] = part.split(':');
+      return { key: key.trim(), quantity: Math.max(1, Math.min(99, parseInt(qty, 10) || 1)) };
+    })
+    .filter(({ key }) => key.length > 0);
+
+const copyToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Clipboard API is unavailable on non-secure origins — fall back to a
+    // temporary textarea + execCommand.
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  }
+};
 
 // Main image first, then the rest of the gallery in display order, de-duped —
 // same convention as ProductCard's own galleryImages memo. Works for both a
@@ -141,7 +172,6 @@ const GamingPcDetailPage: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const [isImageZoomed, setIsImageZoomed] = useState(false);
   const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
-  const [quantity, setQuantity] = useState(1);
   const [whatsappNumber, setWhatsappNumber] = useState<string | null>(null);
   const [pickupLocations, setPickupLocations] = useState<StoreLocation[]>([]);
   const [selectedExtras, setSelectedExtras] = useState<SelectedExtra[]>([]);
@@ -149,7 +179,6 @@ const GamingPcDetailPage: React.FC = () => {
   const [extraResults, setExtraResults] = useState<CatalogProduct[]>([]);
   const [isSearchingExtras, setIsSearchingExtras] = useState(false);
   const [suggestedExtras, setSuggestedExtras] = useState<CatalogProduct[]>([]);
-  const { addItem, openCart } = useCartStore();
   const imageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -167,16 +196,29 @@ const GamingPcDetailPage: React.FC = () => {
         if (response.success && response.data) {
           setGamingPc(response.data);
           setSelectedImage(0);
-          setQuantity(1);
           setSelectedExtras([]);
           setExtraSearch('');
           setExtraResults([]);
+
+          // A shared link can carry extras (?extras=slug:2,other-slug) —
+          // restore them so the shopper sees the same configuration.
+          const sharedExtras = parseSharedExtras(new URLSearchParams(window.location.search).get('extras'));
+          if (sharedExtras.length > 0) {
+            Promise.all(
+              sharedExtras.map(async ({ key, quantity }) => {
+                const res = isUuid(key) ? await getPublicProductById(key) : await getPublicProductBySlug(key);
+                return res.success && res.data ? { product: res.data, quantity } : null;
+              })
+            ).then((entries) => {
+              setSelectedExtras(entries.filter((e): e is SelectedExtra => e !== null));
+            });
+          }
 
           // Keep the URL in sync with the canonical, id-free /gaming-pc/<slug>
           // form — covers old id-based links or a renamed build.
           const canonicalUrl = gamingPcUrl(response.data);
           if (window.location.pathname !== canonicalUrl) {
-            navigate(canonicalUrl, { replace: true });
+            navigate(canonicalUrl + window.location.search, { replace: true });
           }
         } else {
           toast.error(response.message || 'Gaming PC not found');
@@ -293,88 +335,54 @@ const GamingPcDetailPage: React.FC = () => {
     return () => ctx.revert();
   }, [gamingPc]);
 
-  // Bundle line item — its `specs` list is the actual component products, same
-  // convention as the homepage card's Add to Cart (see FeaturedGamingPcsSection).
-  // Extra (optional) products the shopper added get folded into the same flat
-  // line item — the cart only understands a single price/specs list per item,
-  // same as PC Builder's custom build — so the id also encodes which extras
-  // (and how many of each) are in this particular selection, otherwise two
-  // differently-priced picks of the same build would wrongly merge quantities.
-  const buildBundle = (pc: FeaturedGamingPc, extras: SelectedExtra[]): Product => {
-    const extrasSignature = extras
-      .map(({ product, quantity }) => `${product.id}x${quantity}`)
-      .sort()
-      .join('-');
-
-    return {
-      id: extrasSignature ? `gaming-pc-${pc.id}--${extrasSignature}` : `gaming-pc-${pc.id}`,
-      name: pc.name,
-      category: 'Gaming PC',
-      price: Number(pc.price) + extras.reduce((sum, { product, quantity }) => sum + Number(product.price) * quantity, 0),
-      image: pc.images[0] || '',
-      media: pc.images.slice(1).map((url) => ({ url, type: 'image' as const })),
-      description: pc.description || undefined,
-      specs: [
-        ...pc.products.map((p) => {
-          const label = p.category_name ? `${p.category_name}: ${p.name}` : p.name;
-          return p.quantity > 1 ? `${label} ×${p.quantity}` : label;
-        }),
-        ...extras.map(({ product, quantity }) => {
-          const label = `${product.name} (add-on)`;
-          return quantity > 1 ? `${label} ×${quantity}` : label;
-        }),
-      ],
-      components: [
-        ...pc.products.map((p) => ({
-          category: p.category_name || 'Component',
-          name: p.name,
-          quantity: p.quantity,
-          price: Number(p.price || 0),
-        })),
-        ...extras.map(({ product, quantity }) => ({
-          category: 'Add-on',
-          name: product.name,
-          quantity,
-          price: Number(product.price || 0),
-        })),
-      ],
-      rating: 5.0,
-      reviews: 0,
-      stock: 1,
-      in_stock: true,
-      featured: false,
-    };
+  // Add to Cart and Buy Now both hand the build — plus any extras picked
+  // above — to the Build From Scratch page, with every part pre-selected.
+  const handleOpenInBuilder = () => {
+    if (!gamingPc) return;
+    openGamingPcInBuilder(
+      navigate,
+      gamingPc,
+      selectedExtras.map(({ product, quantity }) => ({ product_id: product.id, quantity }))
+    );
   };
 
-  const handleAddToCart = () => {
-    if (!gamingPc) return;
-    const bundle = buildBundle(gamingPc, selectedExtras);
-    for (let i = 0; i < quantity; i++) {
-      addItem(bundle);
-    }
-    openCart();
-  };
-
-  const handleBuyNow = () => {
-    if (!gamingPc) return;
-    const bundle = buildBundle(gamingPc, selectedExtras);
-    for (let i = 0; i < quantity; i++) {
-      addItem(bundle);
-    }
-    navigate('/checkout');
+  // Clean canonical link, plus the selected extras so whoever opens it sees
+  // the same configuration.
+  const buildShareUrl = () => {
+    const base = `${window.location.origin}${gamingPc ? gamingPcUrl(gamingPc) : window.location.pathname}`;
+    if (selectedExtras.length === 0) return base;
+    const extras = selectedExtras
+      .map(({ product, quantity }) => {
+        const key = encodeURIComponent(product.slug || product.id);
+        return quantity > 1 ? `${key}:${quantity}` : key;
+      })
+      .join(',');
+    return `${base}?extras=${extras}`;
   };
 
   const handleShare = async () => {
-    const url = window.location.href;
+    if (!gamingPc) return;
+    const url = buildShareUrl();
+    const total = Number(gamingPc.price) + extrasTotal;
+    const text =
+      selectedExtras.length > 0
+        ? `${gamingPc.name} + ${selectedExtras.length} extra${selectedExtras.length === 1 ? '' : 's'} — AED ${total.toLocaleString()}`
+        : `${gamingPc.name} — AED ${total.toLocaleString()}`;
+
     if (navigator.share) {
       try {
-        await navigator.share({ title: gamingPc?.name, url });
-      } catch {
+        await navigator.share({ title: gamingPc.name, text, url });
+        return;
+      } catch (error) {
         // user cancelled the share sheet — nothing to do
+        if ((error as Error)?.name === 'AbortError') return;
       }
-    } else {
-      await navigator.clipboard.writeText(url);
+    }
+
+    if (await copyToClipboard(url)) {
       toast.success('Link copied to clipboard');
+    } else {
+      toast.error('Could not copy the link');
     }
   };
 
@@ -572,34 +580,16 @@ const GamingPcDetailPage: React.FC = () => {
                   The price is not final. Our team will send you a pricing quotation after order placement.
                 </p>
 
-                {/* Quantity, Add to Cart & Buy Now */}
+                {/* Add to Cart & Buy Now — both open the builder with this build */}
                 <div className="animate-item flex flex-col sm:flex-row gap-3">
-                  <div className="flex items-center bg-muted rounded-lg">
-                    <motion.button
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <Minus className="w-5 h-5" />
-                    </motion.button>
-                    <span className="w-12 text-center font-mono-tech text-lg">{quantity}</span>
-                    <motion.button
-                      onClick={() => setQuantity(quantity + 1)}
-                      className="px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <Plus className="w-5 h-5" />
-                    </motion.button>
-                  </div>
-
-                  <CyberButton size="lg" className="flex-1 gap-2" onClick={handleAddToCart}>
+                  <CyberButton size="lg" className="flex-1 gap-2" onClick={handleOpenInBuilder}>
                     <ShoppingCart className="w-5 h-5" />
                     Add to Cart
                   </CyberButton>
 
                   <button
                     type="button"
-                    onClick={handleBuyNow}
+                    onClick={handleOpenInBuilder}
                     className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-border bg-black px-8 py-4 text-base font-orbitron font-semibold uppercase tracking-wider text-white transition-colors hover:bg-black/85 hover:border-primary"
                   >
                     Buy Now

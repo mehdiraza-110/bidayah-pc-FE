@@ -1,20 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { toast } from 'sonner';
 import { Check, ShoppingCart } from 'lucide-react';
 import { getPublicFeaturedGamingPcs, type FeaturedGamingPc } from '@/services/api';
 import { gamingPcUrl } from '@/lib/slug';
 import { GSAPScrollReveal } from '@/components/effects/GSAPScrollReveal';
 import { Loader } from '@/components/ui/Loader';
 import { CyberButton } from '@/components/ui/CyberButton';
-import { useCartStore } from '@/store/cartStore';
-import type { Product } from '@/data/products';
+import { openGamingPcInBuilder } from '@/lib/gamingPcBuilder';
 
 const FeaturedGamingPcsSection: React.FC = () => {
   const [gamingPcs, setGamingPcs] = useState<FeaturedGamingPc[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { addItem, openCart } = useCartStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -37,41 +35,11 @@ const FeaturedGamingPcsSection: React.FC = () => {
 
   const handleAddToCart = (gamingPc: FeaturedGamingPc, e: React.MouseEvent) => {
     // The card itself is a Link to the detail page — stop the click from
-    // navigating there too.
+    // navigating there too. Add to Cart opens the builder with this build's
+    // parts pre-selected instead of adding a bundle straight to the cart.
     e.preventDefault();
     e.stopPropagation();
-
-    // Added as a single bundle line item — its `specs` list is exactly the
-    // component products, so the cart/checkout clearly shows what's inside,
-    // same convention the PC Builder's custom-build cart item already uses.
-    const bundle: Product = {
-      id: `gaming-pc-${gamingPc.id}`,
-      name: gamingPc.name,
-      category: 'Gaming PC',
-      price: Number(gamingPc.price),
-      image: gamingPc.images[0] || '',
-      media: gamingPc.images.slice(1).map((url) => ({ url, type: 'image' as const })),
-      description: gamingPc.description || undefined,
-      specs: gamingPc.products.map((p) => {
-        const label = p.category_name ? `${p.category_name}: ${p.name}` : p.name;
-        return p.quantity > 1 ? `${label} ×${p.quantity}` : label;
-      }),
-      components: gamingPc.products.map((p) => ({
-        category: p.category_name || 'Component',
-        name: p.name,
-        quantity: p.quantity,
-        price: Number(p.price || 0),
-      })),
-      rating: 5.0,
-      reviews: 0,
-      stock: 1,
-      in_stock: true,
-      featured: false,
-    };
-
-    addItem(bundle);
-    openCart();
-    toast.success(`${gamingPc.name} added to cart`);
+    openGamingPcInBuilder(navigate, gamingPc);
   };
 
   return (

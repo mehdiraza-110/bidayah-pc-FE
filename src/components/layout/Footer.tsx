@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mail, MapPin } from 'lucide-react';
-import { getPublicCategories, type Category } from '@/services/api';
+import { Mail, MapPin, Phone } from 'lucide-react';
+import { getPublicCategories, getPublicSiteSettings, type Category } from '@/services/api';
+import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { InstagramIcon, YouTubeIcon, TikTokIcon, XIcon, ThreadsIcon, FacebookIcon } from '@/components/icons/SocialIcons';
 import { sortByCategoryPriority } from '@/lib/categoryPriority';
 
 const Footer: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
+  // Same number as the WhatsApp chat button — managed in Admin → Settings.
+  const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -22,6 +25,12 @@ const Footer: React.FC = () => {
     };
 
     loadCategories();
+
+    getPublicSiteSettings().then((response) => {
+      if (response.success && response.data?.whatsapp_number) {
+        setPhoneNumber(response.data.whatsapp_number);
+      }
+    });
   }, []);
 
   // Convert categories to footer links format — core PC-build components
@@ -133,6 +142,27 @@ const Footer: React.FC = () => {
               <Mail className="w-4 h-4 text-primary" />
               <span>support@bidayahpc.com</span>
             </div>
+            {phoneNumber && (
+              <div className="flex items-center gap-3">
+                <a
+                  href={`tel:+${phoneNumber.replace(/[^0-9]/g, '')}`}
+                  className="flex items-center gap-2 hover:text-foreground transition-colors"
+                >
+                  <Phone className="w-4 h-4 text-primary" />
+                  <span dir="ltr">{phoneNumber}</span>
+                </a>
+                <a
+                  href={`https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Chat on WhatsApp"
+                  className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+                >
+                  <WhatsAppIcon className="w-4 h-4" />
+                  <span>WhatsApp</span>
+                </a>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-primary" />
               <span>United Arab Emirates</span>

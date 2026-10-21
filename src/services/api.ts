@@ -2401,8 +2401,10 @@ export const getPublicHomepageSections = async (): Promise<ApiResponse<PublicHom
 };
 
 // Public Featured Gaming PCs API (active builds, capped at the admin-configured limit)
-export const getPublicFeaturedGamingPcs = async (): Promise<ApiResponse<FeaturedGamingPc[]>> => {
-  return publicApiRequest<FeaturedGamingPc[]>('/featured-gaming-pcs', {
+export const getPublicFeaturedGamingPcs = async (
+  options: { all?: boolean } = {}
+): Promise<ApiResponse<FeaturedGamingPc[]>> => {
+  return publicApiRequest<FeaturedGamingPc[]>(`/featured-gaming-pcs${options.all ? '?all=true' : ''}`, {
     method: 'GET',
   });
 };

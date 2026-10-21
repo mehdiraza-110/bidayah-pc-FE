@@ -6,6 +6,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import CartDrawer from '@/components/layout/CartDrawer';
 import { ProductCard } from '@/components/products/ProductCard';
+import { ComingSoon } from '@/components/products/ComingSoon';
 import { CategoryHeroBanner } from '@/components/products/CategoryHeroBanner';
 import { Product } from '@/data/products';
 import {
@@ -521,9 +522,19 @@ const ProductsPage: React.FC = () => {
               {isLoading ? (
                 <Loader label="Loading products..." />
               ) : products.length === 0 ? (
-                <div className="text-center py-16">
-                  <p className="text-muted-foreground text-lg">No products found</p>
-                </div>
+                // Nothing at all in this category/search -> "Coming Soon". If the
+                // shopper narrowed things down with filters, the range may well
+                // exist, so keep the plain message there.
+                searchParams.get('vendor_id') ||
+                searchParams.get('in_stock') ||
+                searchParams.get('featured') ||
+                selectedKeyFeatures.length > 0 ? (
+                  <div className="text-center py-16">
+                    <p className="text-muted-foreground text-lg">No products match these filters</p>
+                  </div>
+                ) : (
+                  <ComingSoon />
+                )
               ) : null}
 
               {!isLoading && pagination && pagination.totalPages > 1 && (

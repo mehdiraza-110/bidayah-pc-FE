@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 // yet) also fall back to `?search=`.
 const categoryLinks = [
   { name: 'Build From Scratch', path: '/pc-builder' },
-  { name: 'Gaming PC', fallback: 'Gaming PC' },
+  { name: 'Gaming PC', path: '/gaming-pcs' },
   { name: 'Laptops', terms: ['laptop'], fallback: 'Laptop' },
   { name: 'Monitors', terms: ['monitor'], fallback: 'Monitor' },
   {

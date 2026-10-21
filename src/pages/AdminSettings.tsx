@@ -131,7 +131,7 @@ const AdminSettingsPage: React.FC = () => {
                     id="whatsappNumber"
                     value={whatsappNumber}
                     onChange={(e) => setWhatsappNumber(e.target.value)}
-                    placeholder="+971 50 224 3294"
+                    placeholder="+971 55 235 2485"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Used by the "Check Availability" button on product pages.

@@ -465,7 +465,7 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
                 FEATURED <span className="text-primary">GAMING PCS</span>
               </h1>
               <p className="text-muted-foreground">
-                Curated builds shown on the homepage before "Shop By Category" — name, photos, included products, description, and key features.
+                Curated builds shown on the homepage before "Shop By Category" (up to the homepage limit) and in full on the Gaming PCs page — name, photos, included products, description, and key features.
               </p>
             </div>
             {!isFormOpen && (
@@ -509,6 +509,24 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
                         placeholder="0.00"
                         required
                       />
+                      {(() => {
+                        const partsTotal = form.selectedProducts.reduce(
+                          (sum, { product, quantity }) => sum + Number(product.price || 0) * quantity,
+                          0
+                        );
+                        const bundlePrice = parseFloat(form.price);
+                        if (form.selectedProducts.length === 0 || isNaN(bundlePrice)) return null;
+                        const surcharge = bundlePrice - partsTotal;
+                        return (
+                          <p className="mt-1.5 text-xs text-muted-foreground">
+                            Parts total AED {partsTotal.toLocaleString()} ·{' '}
+                            <span className={surcharge < 0 ? 'text-destructive' : 'text-foreground'}>
+                              {surcharge < 0 ? 'Build Discount' : 'Build Surcharge'} AED {Math.abs(surcharge).toLocaleString()}
+                            </span>
+                            . When a shopper opens this build in Build From Scratch, this amount is added on top of the parts so the total stays at the bundle price.
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -877,7 +895,16 @@ const AdminFeaturedGamingPcsPage: React.FC = () => {
                           <div className="flex-1 min-w-0">
                             <p className="font-rajdhani font-semibold truncate">{gamingPc.name}</p>
                             <p className="text-xs text-muted-foreground truncate">
-                              AED {Number(gamingPc.price).toLocaleString()} · {gamingPc.products.length} product{gamingPc.products.length === 1 ? '' : 's'} · {gamingPc.images.length} photo{gamingPc.images.length === 1 ? '' : 's'}
+                              AED {Number(gamingPc.price).toLocaleString()}
+                              {(() => {
+                                const surcharge =
+                                  Number(gamingPc.price) -
+                                  gamingPc.products.reduce((sum, p) => sum + Number(p.price || 0) * p.quantity, 0);
+                                return gamingPc.products.length > 0 && Math.abs(surcharge) >= 0.01
+                                  ? ` (${surcharge < 0 ? 'discount' : 'surcharge'} AED ${Math.abs(surcharge).toLocaleString()})`
+                                  : '';
+                              })()}
+                              {' '}· {gamingPc.products.length} product{gamingPc.products.length === 1 ? '' : 's'} · {gamingPc.images.length} photo{gamingPc.images.length === 1 ? '' : 's'}
                             </p>
                           </div>
 

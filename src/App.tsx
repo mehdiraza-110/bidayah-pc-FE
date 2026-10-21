@@ -8,6 +8,7 @@ import { AnimatePresence } from "framer-motion";
 import { ThemeProvider } from "next-themes";
 import Index from "./pages/Index";
 import Products from "./pages/Products";
+import GamingPcs from "./pages/GamingPcs";
 import ProductDetail from "./pages/ProductDetail";
 import GamingPcRouter from "./pages/GamingPcRouter";
 import PCBuilder from "./pages/PCBuilder";
@@ -79,6 +80,7 @@ const App = () => (
               <Route path="/products" element={<Products />} />
               <Route path="/product/:id" element={<ProductDetail />} />
               <Route path="/product/:id/:slug" element={<ProductDetail />} />
+              <Route path="/gaming-pcs" element={<GamingPcs />} />
               <Route path="/gaming-pc/:id" element={<GamingPcRouter />} />
               <Route path="/pc-builder" element={<PCBuilder />} />
               <Route path="/blog" element={<Blog />} />

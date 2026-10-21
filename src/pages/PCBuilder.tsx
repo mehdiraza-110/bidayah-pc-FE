@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 import {
@@ -30,6 +30,7 @@ import { NeonCard } from '@/components/ui/NeonCard';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   getPublicPCBuilderOptions,
+  getPublicProductById,
   getPublicPCBuilderProducts,
   getPublicPCBuilderVendorsForCategory,
   type Category,
@@ -40,6 +41,15 @@ import {
 import { useCartStore } from '@/store/cartStore';
 import { Loader } from '@/components/ui/Loader';
 import { cn } from '@/lib/utils';
+import type { PcBuilderPreselect } from '@/lib/gamingPcBuilder';
+import {
+  buildShareFileContent,
+  buildShareLink,
+  decodeBuild,
+  encodeBuild,
+  extractBuildFromText,
+  toPreselect,
+} from '@/lib/buildShare';
 
 const getCategoryIcon = (categoryName: string) => {
   const normalized = categoryName.toLowerCase();
@@ -78,6 +88,18 @@ const getSelectedUnitCount = (items: SelectedItem[]) => items.reduce((sum, item)
 
 const PCBuilderPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const preselect = useMemo<PcBuilderPreselect | undefined>(() => {
+    const fromState = (location.state as { preselect?: PcBuilderPreselect } | null)?.preselect;
+    if (fromState) return fromState;
+    const sharedCode = new URLSearchParams(location.search).get('build');
+    const sharedItems = sharedCode ? decodeBuild(sharedCode) : null;
+    return sharedItems ? toPreselect(sharedItems) : undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const hasAppliedPreselect = useRef(false);
+  // Set when a Gaming PC is loaded: bridges the parts' total up to the build's advertised price.
+  const [buildSurcharge, setBuildSurcharge] = useState(0);
   const { addItem } = useCartStore();
   const [categories, setCategories] = useState<Category[]>([]);
   // Categories with an actual compatibility rule attached to them (e.g. CPU
@@ -107,6 +129,10 @@ const PCBuilderPage: React.FC = () => {
   const [productSearchInput, setProductSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // One entry per category card, so the left-hand quick-nav can scroll the
   // page straight to a step instead of just toggling its accordion open.
@@ -170,6 +196,69 @@ const PCBuilderPage: React.FC = () => {
 
     loadOptions();
   }, []);
+
+  // Arriving from a Gaming PC page: once the builder's categories are known,
+  // load each carried product and drop it into its category's selection.
+  // Parts whose category isn't a builder step, that are out of stock, or that
+  // exceed a step's max quantity can't be placed — reported in one toast.
+  const loadBuild = async (build: PcBuilderPreselect) => {
+    {
+      const loaded = await Promise.all(
+        build.items.map(async ({ product_id, quantity }) => {
+          const response = await getPublicProductById(product_id);
+          return response.success && response.data ? { product: response.data, quantity } : null;
+        })
+      );
+
+      const selection: Record<string, SelectedItem[]> = {};
+      const vendors: Record<string, Vendor | null> = {};
+      let skipped = 0;
+
+      loaded.forEach((entry) => {
+        if (!entry) {
+          skipped++;
+          return;
+        }
+        const { product, quantity } = entry;
+        const category = categories.find((c) => c.id === product.category_id);
+        if (!category) {
+          skipped++;
+          return;
+        }
+
+        const items = selection[category.id] || [];
+        const room = getCategoryMaxQuantity(category) - getSelectedUnitCount(items);
+        const units = getCategoryAllowsDuplicates(category) ? Math.min(quantity, room) : Math.min(1, room);
+        if (units <= 0) {
+          skipped++;
+          return;
+        }
+
+        const vendor = resolveProductVendor(product);
+        selection[category.id] = [...items, { product, vendor, quantity: units }];
+        // Same rule as handleSelectProduct: only compatibility-driving
+        // categories (CPU, motherboard, ...) get their vendor applied.
+        if (vendor && triggerCategoryIds.has(category.id) && !vendors[category.id]) vendors[category.id] = vendor;
+      });
+
+      setSelectedProducts(selection);
+      setSelectedVendors(vendors);
+      setBuildSurcharge(build.buildSurcharge || 0);
+      setActiveCategoryId(categories.find((c) => !selection[c.id]?.length)?.id || '');
+
+      toast.success(`${build.buildName} loaded into the builder`);
+      if (skipped > 0) {
+        toast.info(`${skipped} part${skipped === 1 ? '' : 's'} couldn't be pre-selected — pick ${skipped === 1 ? 'it' : 'them'} manually.`);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!preselect || hasAppliedPreselect.current || categories.length === 0) return;
+    hasAppliedPreselect.current = true;
+    loadBuild(preselect);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories, triggerCategoryIds]);
 
   // Reset the search box the moment a different step opens, so a filter
   // typed for "Storage" doesn't silently carry over into "Fans".
@@ -358,8 +447,21 @@ const PCBuilderPage: React.FC = () => {
       // entirely server-side, so rather than risk leaving an incompatible
       // part selected, clear every other category's selection and let the
       // user re-pick from the freshly filtered lists.
-      setSelectedProducts(prev => ({ [categoryId]: prev[categoryId] }));
-      setSelectedVendors(prev => ({ [categoryId]: inferredVendor }));
+      //
+      // Exception: the FIRST pick in a trigger category (e.g. choosing a
+      // motherboard after a CPU) keeps the other trigger categories — their
+      // option lists were already filtered against each other, so what's
+      // selected there is compatible by construction. Only a later vendor
+      // switch invalidates them.
+      const keepTriggers = !previousTriggerVendor;
+      const isKept = (id: string) => id === categoryId || (keepTriggers && triggerCategoryIds.has(id));
+      setSelectedProducts(prev =>
+        Object.fromEntries(Object.entries(prev).filter(([id]) => isKept(id)))
+      );
+      setSelectedVendors(prev => ({
+        ...Object.fromEntries(Object.entries(prev).filter(([id]) => isKept(id))),
+        [categoryId]: inferredVendor,
+      }));
     }
 
     // Auto-advance the accordion to the next incomplete step: immediately for
@@ -457,17 +559,90 @@ const PCBuilderPage: React.FC = () => {
     });
   };
 
-  const getTotalPrice = () => {
+  const getPartsTotal = () => {
     return Object.values(selectedProducts).reduce((total, items) => {
       return total + (items || []).reduce((sum, item) => sum + Number(item.product.price || 0) * item.quantity, 0);
     }, 0);
   };
+
+  // The surcharge only applies while there's something selected to attach it to.
+  const getSurcharge = () => (getPartsTotal() > 0 ? buildSurcharge : 0);
+  const getTotalPrice = () => getPartsTotal() + getSurcharge();
 
   const isBuildComplete = () => {
     return categories.length > 0 && categories.every(category =>
       (selectedProducts[category.id]?.length ?? 0) > 0
     );
   };
+
+  // ---- Share / import ----
+  const shareItems = categories.flatMap((category) =>
+    (selectedProducts[category.id] || []).map(({ product, quantity }) => ({
+      product_id: product.id,
+      quantity,
+      category: category.category_name,
+      name: product.name,
+    }))
+  );
+  const shareCode = shareItems.length > 0 ? encodeBuild(shareItems) : '';
+
+  const copyText = async (text: string, successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API needs a secure origin — fall back to a hidden textarea.
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (!ok) {
+        toast.error('Could not copy — select the text and copy it manually.');
+        return;
+      }
+    }
+    toast.success(successMessage);
+  };
+
+  const handleDownloadBuild = () => {
+    const blob = new Blob([buildShareFileContent(shareCode, shareItems)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'my-pc-build.bidayah-build.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importFromText = async (text: string) => {
+    const items = extractBuildFromText(text);
+    if (!items) {
+      toast.error("That doesn't look like a valid build code, link or file.");
+      return;
+    }
+    setIsImporting(true);
+    await loadBuild(toPreselect(items));
+    setIsImporting(false);
+    setImportText('');
+    setIsShareOpen(false);
+  };
+
+  // The file is read in the browser only — it's never sent to the server.
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 100_000) {
+      toast.error('That file is too large to be a build file.');
+      return;
+    }
+    await importFromText(await file.text());
+  };
+
+  const surchargeLabel = buildSurcharge < 0 ? 'Build Discount' : 'Build Surcharge';
 
   const handleAddToCart = () => {
     const selectedItems = categories.flatMap(category => selectedProducts[category.id] || []);
@@ -483,14 +658,19 @@ const PCBuilderPage: React.FC = () => {
         const categoryName = product.category_name || categories.find(category => category.id === product.category_id)?.category_name || 'Component';
         const qtySuffix = quantity > 1 ? ` ×${quantity}` : '';
         return (vendor ? `${categoryName}: ${product.name} (${vendor.vendor_name})` : `${categoryName}: ${product.name}`) + qtySuffix;
-      }),
-      components: selectedItems.map(({ product, vendor, quantity }) => ({
-        category: product.category_name || categories.find(category => category.id === product.category_id)?.category_name || 'Component',
-        name: product.name,
-        vendor: vendor?.vendor_name,
-        quantity,
-        price: Number(product.price || 0),
-      })),
+      }).concat(getSurcharge() !== 0 ? [`${surchargeLabel}: AED ${getSurcharge().toLocaleString()}`] : []),
+      components: [
+        ...selectedItems.map(({ product, vendor, quantity }) => ({
+          category: product.category_name || categories.find(category => category.id === product.category_id)?.category_name || 'Component',
+          name: product.name,
+          vendor: vendor?.vendor_name,
+          quantity,
+          price: Number(product.price || 0),
+        })),
+        ...(getSurcharge() !== 0
+          ? [{ category: 'Build', name: surchargeLabel, quantity: 1, price: getSurcharge() }]
+          : []),
+      ],
       rating: 5.0,
       reviews: 0,
       stock: 1,
@@ -1002,8 +1182,14 @@ const PCBuilderPage: React.FC = () => {
                   <div className="space-y-3 pt-6 border-t border-border">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Subtotal</span>
-                      <span className="font-mono-tech">AED {totalPrice.toLocaleString()}</span>
+                      <span className="font-mono-tech">AED {getPartsTotal().toLocaleString()}</span>
                     </div>
+                    {getSurcharge() !== 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{surchargeLabel}</span>
+                        <span className="font-mono-tech">AED {getSurcharge().toLocaleString()}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Assembly</span>
                       <span className="font-mono-tech text-accent">FREE</span>
@@ -1027,6 +1213,16 @@ const PCBuilderPage: React.FC = () => {
                         </span>
                       </button>
                     )}
+
+                    <div className="grid grid-cols-1 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsShareOpen(true)}
+                        className="w-full rounded-md border border-border py-2 text-sm font-rajdhani font-semibold text-foreground transition-colors hover:border-primary/60 hover:text-primary"
+                      >
+                        Share or import a build
+                      </button>
+                    </div>
                   </div>
 
                   {/* Build Status */}
@@ -1098,6 +1294,98 @@ const PCBuilderPage: React.FC = () => {
         </div>
       </main>
 
+      <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron">Share or import a build</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <section className="space-y-3">
+              <h3 className="font-rajdhani text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Share your build
+              </h3>
+              {shareCode ? (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={shareCode}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 font-mono-tech text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyText(shareCode, 'Build code copied')}
+                      className="rounded-md border border-border px-3 text-sm hover:border-primary/60"
+                    >
+                      Copy code
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => copyText(buildShareLink(shareCode), 'Build link copied')}
+                      className="rounded-md border border-border py-2 text-sm hover:border-primary/60"
+                    >
+                      Copy link
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadBuild}
+                      className="rounded-md border border-border py-2 text-sm hover:border-primary/60"
+                    >
+                      Download file
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Only the parts are shared, not prices — your friend sees current prices.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Select some parts first, then share them from here.</p>
+              )}
+            </section>
+
+            <section className="space-y-3 border-t border-border pt-5">
+              <h3 className="font-rajdhani text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Import a build
+              </h3>
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder="Paste a build code or link here"
+                rows={3}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono-tech text-xs focus:border-primary focus:outline-none"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <CyberButton size="sm" disabled={!importText.trim() || isImporting} onClick={() => importFromText(importText)}>
+                  {isImporting ? 'Loading…' : 'Load build'}
+                </CyberButton>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                  className="rounded-md border border-border py-2 text-sm hover:border-primary/60 disabled:opacity-50"
+                >
+                  Upload build file
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={handleImportFile}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Loading a build replaces your current selection. Files are read in your browser and never uploaded.
+              </p>
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isSpecsModalOpen} onOpenChange={setIsSpecsModalOpen}>
         <DialogContent className="max-w-2xl w-[calc(100%-2rem)] gap-0 p-0 overflow-hidden bg-card border-primary/20">
           <div className="px-6 sm:px-7 pt-6 pb-5 border-b border-border bg-gradient-to-b from-primary/[0.07] to-transparent">
@@ -1164,6 +1452,12 @@ const PCBuilderPage: React.FC = () => {
             </div>
           </div>
 
+          {getSurcharge() !== 0 && (
+            <div className="px-6 sm:px-7 py-3 border-t border-border flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">{surchargeLabel}</span>
+              <span className="font-mono-tech">AED {getSurcharge().toLocaleString()}</span>
+            </div>
+          )}
           <div className="px-6 sm:px-7 py-5 border-t border-border bg-muted/20 flex items-center justify-between">
             <span className="font-orbitron text-base font-bold">Total</span>
             <span className="font-orbitron text-2xl font-bold text-primary">AED {totalPrice.toLocaleString()}</span>
